@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistance – CARE EAT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #151516;
+            --surface-border: #252527;
+            --yellow: #f5d526;
+            --yellow-dim: rgba(245, 213, 38, 0.08);
+            --orange: #e8a520;
+            --gradient-btn: linear-gradient(180deg, #f5d526 0%, #e8a520 100%);
+            --text: #f0efe9;
+            --text-muted: #7a7a7e;
+            --text-dark: #0a0a0a;
+            --radius: 20px;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 56px 20px 72px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .logo {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .logo .care { color: var(--text); }
+        .logo .eat { color: var(--yellow); }
+
+        .tagline {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            margin-bottom: 36px;
+        }
+
+        .header h1 {
+            font-size: clamp(26px, 5vw, 36px);
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        /* Divider */
+        .divider {
+            width: 40px;
+            height: 3px;
+            background: var(--gradient-btn);
+            margin: 0 auto 40px;
+            border-radius: 3px;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 16px;
+            transition: border-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .card:hover {
+            border-color: rgba(245, 213, 38, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 16px;
+        }
+
+        .card-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: var(--yellow-dim);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .card-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .card p:last-child { margin-bottom: 0; }
+
+        /* Tips */
+        .tips {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0 16px;
+        }
+
+        .tips li {
+            position: relative;
+            padding-left: 18px;
+            color: var(--text-muted);
+            font-size: 13.5px;
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+
+        .tips li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 8px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--yellow);
+        }
+
+        /* Email button */
+        .email-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px 24px;
+            background: var(--gradient-btn);
+            color: var(--text-dark);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 15px;
+            border-radius: 14px;
+            border: none;
+            transition: opacity 0.2s ease, transform 0.15s ease;
+            margin-top: 4px;
+        }
+
+        .email-btn:hover {
+            opacity: 0.9;
+            transform: scale(0.99);
+        }
+
+        .email-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        /* Outline button */
+        .outline-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--yellow);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 600;
+            padding: 12px 20px;
+            border: 1.5px solid rgba(245, 213, 38, 0.25);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            margin-top: 4px;
+        }
+
+        .outline-btn:hover {
+            background: var(--yellow-dim);
+            border-color: rgba(245, 213, 38, 0.5);
+        }
+
+        .outline-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 48px;
+            padding-top: 28px;
+            border-top: 1px solid var(--surface-border);
+            color: var(--text-muted);
+            font-size: 12px;
+            letter-spacing: 0.3px;
+        }
+
+        .footer span {
+            color: var(--yellow);
+            font-weight: 600;
+        }
+
+        /* Animations */
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .header { animation: fadeUp 0.5s ease both; }
+        .divider { animation: fadeUp 0.5s ease 0.08s both; }
+        .card:nth-child(1) { animation: fadeUp 0.5s ease 0.15s both; }
+        .card:nth-child(2) { animation: fadeUp 0.5s ease 0.22s both; }
+        .card:nth-child(3) { animation: fadeUp 0.5s ease 0.29s both; }
+        .footer { animation: fadeUp 0.5s ease 0.36s both; }
+
+        @media (max-width: 480px) {
+            .container { padding: 40px 16px 56px; }
+            .card { padding: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="header">
+            <div class="logo">
+                <span class="care">CARE </span><span class="eat">EAT.</span>
+            </div>
+            <div class="tagline">Votre compagnon nutritionnel</div>
+            <h1>Assistance</h1>
+            <p>Besoin d'aide ? On est là pour toi.</p>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon">✉️</div>
+                <div class="card-title">Nous contacter</div>
+            </div>
+            <p>Écris-nous et on te répondra dans les plus brefs délais. Pour qu'on puisse t'aider au mieux, pense à préciser :</p>
+            <ul class="tips">
+                <li>L'écran concerné par le problème</li>
+                <li>Une description de ce qui se passe</li>
+                <li>Une capture d'écran si possible</li>
+            </ul>
+            <a href="mailto:support@careeat.app" class="email-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                support@careeat.app
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon">💡</div>
+                <div class="card-title">Questions fréquentes</div>
+            </div>
+            <p>Pour l'instant, l'assistance passe directement par email. Une FAQ complète sera bientôt disponible ici.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-icon">🔒</div>
+                <div class="card-title">Gestion du compte</div>
+            </div>
+            <p>Tu souhaites supprimer ton compte et toutes tes données personnelles ?</p>
+            <a href="account-deletion.html" class="outline-btn">
+                Suppression de compte
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+        </div>
+
+        <div class="footer">
+            © 2025 <span>CARE EAT</span> — Tous droits réservés
+        </div>
+
+    </div>
+</body>
+</html>
