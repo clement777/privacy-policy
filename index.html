@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Politique de Confidentialité – CARE EAT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #0a0a0a;
+            --surface: #151516;
+            --surface-border: #252527;
+            --yellow: #f5d526;
+            --yellow-dim: rgba(245, 213, 38, 0.08);
+            --orange: #e8a520;
+            --gradient-btn: linear-gradient(180deg, #f5d526 0%, #e8a520 100%);
+            --text: #f0efe9;
+            --text-muted: #7a7a7e;
+            --text-dark: #0a0a0a;
+            --radius: 20px;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 56px 20px 72px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .logo { font-size: 28px; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; }
+        .logo .care { color: var(--text); }
+        .logo .eat { color: var(--yellow); }
+
+        .tagline { color: var(--text-muted); font-size: 14px; font-weight: 500; letter-spacing: 0.5px; margin-bottom: 36px; }
+
+        .header h1 { font-size: clamp(24px, 5vw, 34px); font-weight: 800; color: var(--text); margin-bottom: 10px; }
+
+        .header .meta { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+        .header .meta strong { color: var(--text); font-weight: 600; }
+
+        .divider { width: 40px; height: 3px; background: var(--gradient-btn); margin: 0 auto 40px; border-radius: 3px; }
+
+        .section {
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius);
+            padding: 28px;
+            margin-bottom: 16px;
+        }
+
+        .section-title { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+
+        .section-num {
+            min-width: 32px; height: 32px; border-radius: 10px;
+            background: var(--gradient-btn); color: var(--text-dark);
+            font-weight: 800; font-size: 13px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+
+        .section-title h2 { font-size: 17px; font-weight: 700; color: var(--text); }
+
+        .section p { color: var(--text-muted); font-size: 14px; margin-bottom: 12px; line-height: 1.7; }
+        .section p:last-child { margin-bottom: 0; }
+        .section strong { color: var(--text); font-weight: 600; }
+        .section a { color: var(--yellow); text-decoration: none; font-weight: 600; }
+        .section a:hover { text-decoration: underline; }
+
+        .sub-heading { font-size: 15px; font-weight: 700; color: var(--text); margin: 18px 0 10px; }
+
+        .data-list { list-style: none; padding: 0; margin: 8px 0 14px; }
+        .data-list li {
+            position: relative; padding-left: 18px;
+            color: var(--text-muted); font-size: 13.5px; margin-bottom: 6px; line-height: 1.55;
+        }
+        .data-list li::before {
+            content: ''; position: absolute; left: 0; top: 8px;
+            width: 5px; height: 5px; border-radius: 50%; background: var(--yellow);
+        }
+        .data-list li strong { color: var(--text); }
+
+        .table-wrap {
+            overflow-x: auto; margin: 12px 0 14px;
+            border-radius: 12px; border: 1px solid var(--surface-border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        th {
+            background: rgba(245, 213, 38, 0.06); color: var(--yellow);
+            font-weight: 700; text-align: left; padding: 12px 14px;
+            border-bottom: 1px solid var(--surface-border); white-space: nowrap;
+        }
+        td {
+            padding: 10px 14px; color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            vertical-align: top; line-height: 1.5;
+        }
+        tr:last-child td { border-bottom: none; }
+        td strong { color: var(--text); font-weight: 600; }
+
+        .info-box {
+            background: var(--yellow-dim);
+            border: 1px solid rgba(245, 213, 38, 0.15);
+            border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+        }
+        .info-box p { color: var(--text-muted); font-size: 13px; margin: 0; line-height: 1.55; }
+        .info-box strong { color: var(--text); }
+
+        .footer {
+            text-align: center; margin-top: 48px; padding-top: 28px;
+            border-top: 1px solid var(--surface-border);
+            color: var(--text-muted); font-size: 12px; letter-spacing: 0.3px;
+        }
+        .footer span { color: var(--yellow); font-weight: 600; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .header { animation: fadeUp 0.5s ease both; }
+        .divider { animation: fadeUp 0.5s ease 0.08s both; }
+
+        @media (max-width: 480px) {
+            .container { padding: 40px 16px 56px; }
+            .section { padding: 22px 18px; }
+            table { font-size: 11.5px; }
+            th, td { padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="header">
+            <div class="logo">
+                <span class="care">CARE </span><span class="eat">EAT.</span>
+            </div>
+            <div class="tagline">Votre compagnon nutritionnel</div>
+            <h1>Politique de Confidentialité</h1>
+            <div class="meta">
+                <strong>Dernière mise à jour :</strong> Février 2025<br>
+                <strong>Application :</strong> CARE EAT (iOS / Android)<br>
+                <strong>Éditeur :</strong> CARE EAT
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 1 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">1</div>
+                <h2>Préambule</h2>
+            </div>
+            <p>La présente Politique de Confidentialité décrit la manière dont CARE EAT (« nous », « notre », « l'éditeur ») collecte, utilise et protège les données personnelles des utilisateurs de l'application mobile CARE EAT (« l'Application ») et des services associés.</p>
+            <p>Nous nous engageons à respecter le Règlement Général sur la Protection des Données (RGPD) et la loi « Informatique et Libertés ». Les données à caractère personnel, et en particulier les <strong>données de santé</strong> collectées dans le cadre de l'Application, font l'objet d'un traitement loyal, transparent et sécurisé, avec une base légale et un consentement explicite lorsque la réglementation l'exige.</p>
+            <p>Nous nous réservons le droit de modifier cette politique. Toute modification sera publiée dans l'Application et, le cas échéant, communiquée par un moyen approprié. La version en vigueur est celle consultable dans l'Application à la date de votre utilisation.</p>
+        </div>
+
+        <!-- 2 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">2</div>
+                <h2>Responsable du traitement</h2>
+            </div>
+            <p>Le responsable du traitement des données personnelles est <strong>CARE EAT</strong>.</p>
+            <p><strong>Contact :</strong></p>
+            <ul class="data-list">
+                <li><strong>E-mail :</strong> <a href="mailto:support@careeat.com">support@careeat.com</a></li>
+                <li><strong>Via l'Application :</strong> Paramètres > Aide et support > Contacter le support</li>
+            </ul>
+            <p>Pour toute question relative à la protection des données ou à l'exercice de vos droits, vous pouvez nous contacter aux coordonnées ci-dessus.</p>
+        </div>
+
+        <!-- 3 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">3</div>
+                <h2>Données collectées et contexte de collecte</h2>
+            </div>
+            <p>L'Application collecte les données suivantes dans le cadre des fonctionnalités décrites.</p>
+
+            <h3 class="sub-heading">3.1 Données d'identification et de compte</h3>
+            <ul class="data-list">
+                <li><strong>Nom</strong> (optionnel, lors de l'inscription)</li>
+                <li><strong>Adresse e-mail</strong></li>
+                <li><strong>Identifiant de compte</strong> (généré côté serveur)</li>
+                <li><strong>Token d'authentification</strong> (pour la session)</li>
+            </ul>
+            <p><strong>Contexte :</strong> création et gestion du compte (inscription, connexion), sécurisation de l'accès aux services.</p>
+
+            <h3 class="sub-heading">3.2 Données de santé et données nutritionnelles</h3>
+            <p>Ces données sont collectées lors du <strong>questionnaire nutritionnel initial</strong> (onboarding) et tout au long de l'utilisation de l'Application. Leur traitement est nécessaire à la fourniture du service personnalisé et, pour les données de santé au sens du RGPD, fait l'objet de votre <strong>consentement explicite</strong> préalable (voir section 4).</p>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Donnée</th><th>Finalité</th><th>Moment de collecte</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Poids</strong></td><td>Plan nutritionnel, suivi d'évolution</td><td>Questionnaire initial + écran « Poids »</td></tr>
+                        <tr><td><strong>Taille</strong></td><td>Calcul des besoins (IMC, métabolisme)</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Âge</strong></td><td>Calcul des besoins énergétiques</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Sexe</strong></td><td>Calcul des besoins et hydratation</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Objectif nutritionnel</strong></td><td>Personnalisation du plan</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Niveau d'activité</strong></td><td>Calcul des besoins</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Jours et type de sport</strong>, intensité, durée</td><td>Plans « jour sport » / « jour repos », hydratation</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Allergies alimentaires</strong></td><td>Adaptation des recettes et sécurité</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Préférences alimentaires</strong></td><td>Personnalisation des recettes</td><td>Questionnaire initial</td></tr>
+                        <tr><td><strong>Historique du poids</strong></td><td>Suivi et graphiques</td><td>Saisie dans l'écran Poids</td></tr>
+                        <tr><td><strong>Plan nutritionnel</strong></td><td>Génération des recettes et suivi</td><td>Après questionnaire + mise à jour</td></tr>
+                        <tr><td><strong>Objectifs d'hydratation</strong></td><td>Rappels et suivi</td><td>Calculés à partir du questionnaire</td></tr>
+                        <tr><td><strong>Consommation d'eau</strong> (optionnel)</td><td>Suivi hydratation</td><td>Saisie dans l'Application</td></tr>
+                        <tr><td><strong>Activités sportives manuelles</strong></td><td>Estimation des dépenses</td><td>Saisie dans l'écran Sport</td></tr>
+                        <tr><td><strong>Pas / calories</strong> (si autorisation)</td><td>Intégration au suivi activité</td><td>Optionnel, selon autorisation</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <p>Les <strong>recettes hebdomadaires</strong> générées, les <strong>listes de courses</strong> et les <strong>préférences de notifications</strong> (repas, poids, hydratation) sont dérivées de ces données et des paramètres du plan.</p>
+
+            <h3 class="sub-heading">3.3 Données techniques et de navigation</h3>
+            <ul class="data-list">
+                <li>Utilisation de l'Application (fonctionnalités utilisées)</li>
+                <li>Préférences de notification (activation/désactivation)</li>
+                <li>Données stockées localement sur l'appareil (cache des recettes, préférences) pour le bon fonctionnement et, le cas échéant, l'usage hors ligne</li>
+            </ul>
+            <p>Nous ne collectons pas d'adresse postale ni de numéro de téléphone sauf si vous nous les communiquez volontairement (ex. support).</p>
+        </div>
+
+        <!-- 4 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">4</div>
+                <h2>Bases légales et consentement (RGPD)</h2>
+            </div>
+            <ul class="data-list">
+                <li><strong>Exécution du contrat (Article 6.1.b RGPD) :</strong> les données nécessaires à la création du compte, à la génération du plan nutritionnel, à la fourniture des recettes, au suivi du poids et à la gestion de l'abonnement sont traitées pour l'exécution des services contractuels.</li>
+                <li><strong>Consentement explicite (Article 6.1.a et 9.2 RGPD) :</strong> le traitement des <strong>données de santé</strong> (poids, taille, objectifs nutritionnels, allergies, activité physique, historique du poids, etc.) et, le cas échéant, le couplage avec des données provenant d'Apple Santé / Google Health Connect, repose sur votre <strong>consentement explicite</strong>. Ce consentement est recueilli lors du questionnaire initial et, pour les données Santé / Health Connect, lors de la demande d'autorisation sur l'appareil. Vous pouvez retirer votre consentement à tout moment (voir section 7).</li>
+                <li><strong>Intérêt légitime :</strong> amélioration des services, sécurité, prévention des abus, dans le respect de vos droits.</li>
+            </ul>
+            <p>La collecte des données de santé est <strong>strictement limitée</strong> à ce qui est nécessaire pour fournir les fonctionnalités décrites (plan personnalisé, recettes adaptées, suivi du poids et de l'activité). Nous ne vendons pas vos données de santé à des tiers.</p>
+        </div>
+
+        <!-- 5 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">5</div>
+                <h2>Finalités et durées de conservation</h2>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th>Finalité</th><th>Données concernées</th><th>Base légale</th><th>Durée de conservation</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Création et gestion du compte</td><td>Identité, e-mail, token</td><td>Exécution du contrat</td><td>Jusqu'à suppression du compte + 3 ans après dernier contact</td></tr>
+                        <tr><td>Génération et mise à jour du plan nutritionnel</td><td>Questionnaire (santé, préférences), plan</td><td>Consentement / Exécution du contrat</td><td>Jusqu'à suppression du compte</td></tr>
+                        <tr><td>Recettes et listes de courses</td><td>Plan, préférences, allergies</td><td>Exécution du contrat</td><td>Jusqu'à suppression du compte</td></tr>
+                        <tr><td>Suivi du poids et graphiques</td><td>Poids, dates</td><td>Consentement / Exécution du contrat</td><td>Jusqu'à suppression du compte</td></tr>
+                        <tr><td>Notifications</td><td>Préférences, données de suivi</td><td>Exécution du contrat</td><td>Jusqu'à désactivation ou suppression du compte</td></tr>
+                        <tr><td>Abonnements et facturation</td><td>Identifiant Apple/Google, historique d'achat</td><td>Exécution du contrat</td><td>Conformément aux obligations légales (ex. 10 ans)</td></tr>
+                        <tr><td>Support client</td><td>Échanges, identité</td><td>Exécution du contrat / Intérêt légitime</td><td>Durée du traitement + délai légal</td></tr>
+                        <tr><td>Statistiques et amélioration</td><td>Données agrégées / anonymisées</td><td>Intérêt légitime</td><td>Selon besoin, données anonymisées</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p>À l'issue des durées indiquées, les données sont supprimées ou anonymisées, sauf obligation légale de conservation.</p>
+        </div>
+
+        <!-- 6 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">6</div>
+                <h2>Outils et sous-traitants</h2>
+            </div>
+            <p>Nous nous appuyons sur les prestataires suivants, conformément au RGPD (contrats et garanties appropriés) :</p>
+            <ul class="data-list">
+                <li><strong>Xano :</strong> hébergement des bases de données et API (utilisateurs, plans, recettes, suivi du poids). Les données peuvent être hébergées dans l'Union européenne selon la configuration du service.</li>
+                <li><strong>Stockage local (AsyncStorage / appareil) :</strong> cache des recettes, préférences, données de session, pour le fonctionnement de l'Application et, le cas échéant, hors ligne.</li>
+                <li><strong>Apple (App Store) / Google (Play Store) :</strong> distribution de l'Application et <strong>gestion des achats intégrés (In-App Purchases)</strong>. Les transactions et données de facturation liées aux abonnements sont gérées par Apple ou Google ; nous ne stockons pas les numéros de carte bancaire.</li>
+                <li><strong>RevenueCat :</strong> gestion des abonnements et vérification du statut « Pro » (identifiant utilisateur, statut d'entitlement).</li>
+                <li><strong>Expo Notifications :</strong> envoi des notifications push (rappels repas, poids, hydratation) après votre consentement.</li>
+                <li><strong>Apple Santé / Google Health Connect :</strong> uniquement si vous accordez les autorisations ; lecture des données (pas, calories, etc.) pour les intégrer au suivi d'activité, selon les autorisations demandées par l'Application.</li>
+            </ul>
+            <p>Nous ne vendons pas vos données personnelles. Les transferts hors UE/EEE, s'ils existent, sont encadrés par les clauses types de la Commission européenne ou des garanties équivalentes.</p>
+        </div>
+
+        <!-- 7 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">7</div>
+                <h2>Vos droits (RGPD) et suppression du compte</h2>
+            </div>
+            <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+            <ul class="data-list">
+                <li><strong>Droit d'accès :</strong> obtenir la confirmation que des données vous concernant sont traitées et en recevoir une copie.</li>
+                <li><strong>Droit de rectification :</strong> faire corriger des données inexactes ou incomplètes.</li>
+                <li><strong>Droit à l'effacement :</strong> demander la suppression de vos données personnelles, sous réserve des obligations légales.</li>
+                <li><strong>Droit à la limitation du traitement :</strong> demander que certaines données ne soient plus utilisées dans certains cas.</li>
+                <li><strong>Droit d'opposition :</strong> vous opposer à un traitement fondé sur l'intérêt légitime (ex. prospection).</li>
+                <li><strong>Droit à la portabilité :</strong> recevoir vos données dans un format structuré et lisible, pour les transmettre à un autre responsable.</li>
+            </ul>
+
+            <p><strong>Exercice des droits :</strong></p>
+            <ul class="data-list">
+                <li>E-mail : <a href="mailto:support@careeat.com">support@careeat.com</a></li>
+                <li>Via l'Application : Paramètres > Confidentialité (et, pour l'export, « Exporter mes données » si disponible).</li>
+            </ul>
+
+            <h3 class="sub-heading">Droit à l'effacement et suppression du compte</h3>
+            <p>Vous pouvez <strong>supprimer votre compte et toutes les données personnelles</strong> associées à tout moment, directement depuis l'Application :</p>
+            <ul class="data-list">
+                <li><strong>Paramètres (Profil) > « Supprimer mon compte »</strong></li>
+                <li><strong>Paramètres > Confidentialité > « Supprimer mon compte »</strong></li>
+            </ul>
+            <div class="info-box">
+                <p>Après confirmation, nous procédons à la suppression de votre compte et des données associées sur nos systèmes (backend Xano), et l'Application efface les données stockées localement. Cette action est <strong>irréversible</strong>. Les données nécessaires aux obligations légales ou comptables (ex. facturation) peuvent être conservées pour la durée imposée par la loi.</p>
+            </div>
+            <p>Vous avez également le droit d'introduire une <strong>réclamation</strong> auprès de la CNIL : <a href="https://www.cnil.fr" target="_blank">www.cnil.fr</a></p>
+        </div>
+
+        <!-- 8 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">8</div>
+                <h2>Avis médical et données de santé</h2>
+            </div>
+            <p>CARE EAT fournit des <strong>conseils nutritionnels à titre informatif uniquement</strong>. L'Application <strong>n'est pas un dispositif médical</strong> et <strong>ne remplace pas une consultation chez un médecin, un nutritionniste ou un diététicien</strong>.</p>
+            <p>En utilisant l'Application et en nous communiquant des données de santé, vous confirmez avoir pris connaissance de cet avertissement et, le cas échéant, avoir consulté un professionnel de santé avant de commencer un nouveau régime ou programme nutritionnel, notamment en cas de pathologie, de traitement médical, de grossesse ou d'allaitement.</p>
+            <p>Le traitement de vos données de santé est strictement limité aux finalités décrites dans la présente politique et repose sur votre consentement explicite.</p>
+        </div>
+
+        <!-- 9 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">9</div>
+                <h2>Sécurité et violations de données</h2>
+            </div>
+            <p>Nous mettons en œuvre des mesures techniques et organisationnelles appropriées (accès restreint, authentification, chiffrement des échanges, hébergement sécurisé) pour protéger vos données.</p>
+            <p>En cas de <strong>violation de données</strong> susceptible d'engendrer un risque pour vos droits et libertés, nous nous engageons à vous en informer et, le cas échéant, à notifier la CNIL dans les délais prévus par le RGPD, et à prendre les mesures correctives nécessaires.</p>
+        </div>
+
+        <!-- 10 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">10</div>
+                <h2>Mineurs</h2>
+            </div>
+            <p>L'Application peut être utilisée par des personnes de tout âge dans le cadre d'un usage personnel. Pour les <strong>mineurs</strong>, nous recommandons l'accord d'un parent ou tuteur. Nous ne collectons pas sciemment de données personnelles de mineurs sans que le consentement parental soit obtenu lorsque la loi l'exige.</p>
+        </div>
+
+        <!-- 11 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">11</div>
+                <h2>Cookies et stockage local</h2>
+            </div>
+            <p>L'Application utilise un <strong>stockage local</strong> sur votre appareil (ex. AsyncStorage) pour les préférences, le cache des recettes et la session. Aucun cookie tiers de ciblage publicitaire n'est déposé par nous dans l'Application.</p>
+            <p>Si un site web associé à CARE EAT utilise des cookies, une information spécifique sera fournie sur ce site.</p>
+        </div>
+
+        <!-- 12 -->
+        <div class="section">
+            <div class="section-title">
+                <div class="section-num">12</div>
+                <h2>Contact</h2>
+            </div>
+            <p>Pour toute question relative à cette Politique de Confidentialité ou à vos données personnelles :</p>
+            <ul class="data-list">
+                <li><strong>E-mail :</strong> <a href="mailto:support@careeat.com">support@careeat.com</a></li>
+                <li><strong>Application :</strong> Paramètres > Aide et support > Contacter le support</li>
+            </ul>
+            <p>En utilisant CARE EAT, vous acceptez la présente Politique de Confidentialité. Nous vous remercions de votre confiance.</p>
+        </div>
+
+        <div class="footer">
+            © 2025 <span>CARE EAT</span> — Tous droits réservés
+        </div>
+
+    </div>
+</body>
+</html>
