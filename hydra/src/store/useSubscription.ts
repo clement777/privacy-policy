@@ -48,7 +48,10 @@ interface SubState {
   offering: PurchasesOffering | null;
   configured: boolean;
 
-  init: (appUserId: string) => Promise<void>;
+  // appUserId omitted → configure RevenueCat with an anonymous ID (used during
+  // the onboarding funnel, before the user creates an account). Passing an id
+  // later links (logIn) the anonymous purchases to that account.
+  init: (appUserId?: string) => Promise<void>;
   refresh: () => Promise<void>;
   loadOfferings: () => Promise<void>;
   purchase: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
@@ -73,13 +76,18 @@ export const useSubscription = create<SubState>((set, get) => ({
     }
     try {
       if (!get().configured) {
-        Purchases.configure({ apiKey, appUserID: appUserId });
+        // With appUserID → identified; without → RevenueCat mints an anonymous
+        // ID that later transfers to the account on logIn.
+        Purchases.configure(
+          appUserId ? { apiKey, appUserID: appUserId } : { apiKey }
+        );
         set({ configured: true });
         Purchases.addCustomerInfoUpdateListener((info) => {
           set({ status: isActive(info) ? 'active' : 'inactive' });
         });
-      } else {
-        // Same session, different account → relink.
+      } else if (appUserId) {
+        // Already configured (anonymously, or a different account) and now we
+        // have an account id → link it. Transfers the anonymous trial across.
         await Purchases.logIn(appUserId);
       }
       await get().refresh();

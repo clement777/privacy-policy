@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -109,6 +110,7 @@ export function OnboardingScreen() {
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   const [sex, setSex] = useState<Sex>(profile.sex);
   const [weightKg, setWeightKg] = useState(profile.weightKg);
@@ -169,6 +171,11 @@ export function OnboardingScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {}
     );
+    // Show a short "we're computing your plan" screen for a personalised feel,
+    // THEN persist (completeOnboarding flips `onboarded` → the app moves on to
+    // the paywall). Keep the delay in step with the cycling messages below.
+    setPreparing(true);
+    await new Promise((r) => setTimeout(r, 2700));
     const water =
       customMode && Number(customMl) >= CUSTOM_MIN
         ? clampMl(Number(customMl))
@@ -187,6 +194,8 @@ export function OnboardingScreen() {
       { defaultWaterMl: water }
     );
   };
+
+  if (preparing) return <PreparingView need={need} />;
 
   return (
     <SafeAreaView style={styles.root}>
@@ -510,6 +519,40 @@ export function OnboardingScreen() {
   );
 }
 
+// Personalised "we're preparing your plan" transition shown between the last
+// onboarding step and the paywall. Cycles a few reassuring lines while the
+// answers are saved, so the paywall feels earned rather than abrupt.
+const PREP_MSGS = [
+  'On prépare ta répartition de consommation d’eau dans la journée…',
+  'On cale ta barre de vie sur ton rythme de sommeil…',
+  'On calibre tes rappels par verre…',
+] as const;
+
+function PreparingView({ need }: { need: number }) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const id = setInterval(
+      () => setIdx((i) => Math.min(PREP_MSGS.length - 1, i + 1)),
+      850
+    );
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <SafeAreaView style={styles.prepRoot}>
+      <View style={styles.prepInner}>
+        <Text style={styles.prepBrand}>HYDRA</Text>
+        <ActivityIndicator
+          size="large"
+          color={C.segmentFull}
+          style={{ marginVertical: 28 }}
+        />
+        <Text style={styles.prepMsg}>{PREP_MSGS[idx]}</Text>
+        <Text style={styles.prepNeed}>OBJECTIF ESTIMÉ · {need} mL / JOUR</Text>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 function RecapRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.recapRow}>
@@ -521,6 +564,35 @@ function RecapRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+
+  prepRoot: {
+    flex: 1,
+    backgroundColor: C.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prepInner: { paddingHorizontal: 40, alignItems: 'center' },
+  prepBrand: {
+    color: C.segmentFull,
+    fontFamily: FONTS.display,
+    fontSize: 44,
+    letterSpacing: 10,
+  },
+  prepMsg: {
+    color: C.text,
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    minHeight: 63,
+  },
+  prepNeed: {
+    color: C.segmentFull,
+    fontFamily: FONTS.label,
+    fontSize: 12,
+    letterSpacing: 1.5,
+    marginTop: 20,
+  },
   progressRow: {
     flexDirection: 'row',
     gap: 6,

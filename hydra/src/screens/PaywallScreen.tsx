@@ -15,7 +15,7 @@ import { C, FONTS, RADIUS } from '../theme/colors';
 
 // Standard Apple EULA (used unless you host your own Terms of Use).
 const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-const PRIVACY_URL = 'https://hydra-app.vercel.app/privacy.html'; // TODO: host it
+const PRIVACY_URL = 'https://hydra-landing-sooty.vercel.app/privacy.html';
 
 const VALUE_PROPS = [
   ['🩸', 'Ta barre de vie', 'Une barre qui se vide en temps réel. Bois pour la remplir.'],
@@ -27,7 +27,7 @@ const VALUE_PROPS = [
 export function PaywallScreen() {
   const { packages, offering, purchase, restore, loadOfferings } =
     useSubscription();
-  const { signOut } = useAuth();
+  const { signOut, status: authStatus } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -118,10 +118,16 @@ export function PaywallScreen() {
           <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={8}>
             <Text style={styles.link}>Confidentialité</Text>
           </Pressable>
-          <Text style={styles.linkSep}>·</Text>
-          <Pressable onPress={() => signOut()} hitSlop={8}>
-            <Text style={styles.link}>Se déconnecter</Text>
-          </Pressable>
+          {/* Only meaningful once an account exists — during the funnel the user
+              reaches the paywall before signing in. */}
+          {authStatus === 'signedIn' ? (
+            <>
+              <Text style={styles.linkSep}>·</Text>
+              <Pressable onPress={() => signOut()} hitSlop={8}>
+                <Text style={styles.link}>Se déconnecter</Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>

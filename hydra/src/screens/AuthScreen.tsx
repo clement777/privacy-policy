@@ -20,7 +20,9 @@ type Mode = 'signIn' | 'signUp';
 export function AuthScreen() {
   const { appleAvailable, signInWithApple, signInWithEmail, signUpWithEmail } =
     useAuth();
-  const [mode, setMode] = useState<Mode>('signIn');
+  // The account step now comes at the END of the funnel (after onboarding +
+  // paywall), so default to creating an account; returning users can toggle.
+  const [mode, setMode] = useState<Mode>('signUp');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,10 @@ export function AuthScreen() {
         >
           <View style={styles.hero}>
             <Text style={styles.brand}>HYDRA</Text>
-            <Text style={styles.tag}>Ta barre de vie. L'alcool est un poison.</Text>
+            <Text style={styles.tag}>
+              Dernière étape : crée ton compte pour sauvegarder ta progression et
+              retrouver ta barre sur tous tes appareils.
+            </Text>
           </View>
 
           {appleAvailable ? (

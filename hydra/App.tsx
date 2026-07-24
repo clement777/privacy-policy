@@ -91,10 +91,14 @@ export default function App() {
     return () => sub.remove();
   }, [storeHydrated]);
 
-  // Once signed in, bring up the subscription (RevenueCat) for that account.
+  // Configure RevenueCat: anonymously as soon as auth resolves to signed-out
+  // (so the paywall works during the onboarding funnel, before an account
+  // exists), then link it to the account once the user signs in at the end.
   useEffect(() => {
     if (authStatus === 'signedIn' && userId) {
       useSubscription.getState().init(userId).catch(() => {});
+    } else if (authStatus === 'signedOut') {
+      useSubscription.getState().init().catch(() => {});
     }
   }, [authStatus, userId]);
 
@@ -103,24 +107,29 @@ export default function App() {
     return <Splash />;
   }
 
-  // Not signed in → gate the whole app behind the account screen (paid model).
-  if (authStatus === 'signedOut') {
+  // Onboarding funnel (show value first, then ask to pay, then the account):
+  //   1) questionnaire  →  2) paywall  →  3) create account  →  app
+  // The questionnaire runs with no account; its answers live in the local store
+  // and get pushed to the cloud once the user signs in at the end.
+
+  // 1) Not onboarded → the questionnaire, straight away (no account needed).
+  if (!onboarded) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <AuthScreen />
+          <OnboardingScreen />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
   }
 
-  // Signed in but subscription still resolving → splash (brief).
+  // Subscription (anonymous at this stage) still resolving → brief splash.
   if (subStatus === 'loading') {
     return <Splash />;
   }
 
-  // Signed in, no active subscription/trial → hard paywall (no free access).
+  // 2) No active subscription/trial → hard paywall (no free access).
   if (subStatus === 'inactive') {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -132,12 +141,14 @@ export default function App() {
     );
   }
 
-  if (!onboarded) {
+  // 3) Trial/subscription active but no account yet → create it to save
+  //    progress (this also links the anonymous trial to the account).
+  if (authStatus === 'signedOut') {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <OnboardingScreen />
+          <AuthScreen />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
