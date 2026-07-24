@@ -61,6 +61,9 @@ export default function App() {
   const [storeHydrated, setStoreHydrated] = useState(
     useHydration.persist.hasHydrated()
   );
+  // Lets a signed-out user open the account screen straight from the paywall
+  // (returning users reinstalling, or the App Store reviewer signing in).
+  const [wantsSignIn, setWantsSignIn] = useState(false);
 
   useEffect(() => {
     ensurePermissions().catch(() => {});
@@ -129,26 +132,35 @@ export default function App() {
     return <Splash />;
   }
 
-  // 2) No active subscription/trial → hard paywall (no free access).
-  if (subStatus === 'inactive') {
+  // 2) Account screen — shown when signed out AND either the anonymous trial is
+  //    already active (new user finishing the funnel → create an account to
+  //    save progress) OR the user tapped "Se connecter" on the paywall
+  //    (returning user / reviewer). onBack returns to the paywall when one is
+  //    still behind (subscription not yet active).
+  if (authStatus === 'signedOut' && (subStatus === 'active' || wantsSignIn)) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <PaywallScreen />
+          <AuthScreen
+            initialMode={wantsSignIn ? 'signIn' : 'signUp'}
+            onBack={
+              subStatus === 'inactive' ? () => setWantsSignIn(false) : undefined
+            }
+          />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
   }
 
-  // 3) Trial/subscription active but no account yet → create it to save
-  //    progress (this also links the anonymous trial to the account).
-  if (authStatus === 'signedOut') {
+  // 3) No active subscription/trial → hard paywall (no free access). Signed-out
+  //    users get a shortcut to sign in (for an existing account).
+  if (subStatus === 'inactive') {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <AuthScreen />
+          <PaywallScreen onRequestSignIn={() => setWantsSignIn(true)} />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );

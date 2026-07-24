@@ -24,7 +24,14 @@ const VALUE_PROPS = [
   ['📊', 'Moteur physiologique', 'Calculs basés sur ton corps et la vraie science, pas des points au hasard.'],
 ];
 
-export function PaywallScreen() {
+interface Props {
+  // Jump to the account screen from the paywall (returning users reinstalling,
+  // or the App Store reviewer signing into the test account). Only wired when
+  // the user isn't signed in yet.
+  onRequestSignIn?: () => void;
+}
+
+export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const { packages, offering, purchase, restore, loadOfferings } =
     useSubscription();
   const { signOut, status: authStatus } = useAuth();
@@ -100,6 +107,12 @@ export function PaywallScreen() {
         <Pressable onPress={onRestore} disabled={busy} hitSlop={8}>
           <Text style={styles.restore}>Restaurer mes achats</Text>
         </Pressable>
+
+        {authStatus === 'signedOut' && onRequestSignIn ? (
+          <Pressable onPress={onRequestSignIn} disabled={busy} hitSlop={8}>
+            <Text style={styles.signIn}>Déjà un compte ? Se connecter</Text>
+          </Pressable>
+        ) : null}
 
         <Text style={styles.legal}>
           {offering?.serverDescription
@@ -208,6 +221,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginTop: 16,
+  },
+  signIn: {
+    color: C.segmentFull,
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 14,
   },
   legal: {
     color: C.textDim,

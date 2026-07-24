@@ -17,12 +17,18 @@ import { C, FONTS, RADIUS } from '../theme/colors';
 
 type Mode = 'signIn' | 'signUp';
 
-export function AuthScreen() {
+interface Props {
+  // Reached at the funnel's end → default to sign-up. Opened from the paywall's
+  // "Déjà un compte ?" link → 'signIn'. Returning users can still toggle.
+  initialMode?: Mode;
+  // When there's a paywall behind (user came from it), a way back to it.
+  onBack?: () => void;
+}
+
+export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
   const { appleAvailable, signInWithApple, signInWithEmail, signUpWithEmail } =
     useAuth();
-  // The account step now comes at the END of the funnel (after onboarding +
-  // paywall), so default to creating an account; returning users can toggle.
-  const [mode, setMode] = useState<Mode>('signUp');
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,11 +71,18 @@ export function AuthScreen() {
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
         >
+          {onBack ? (
+            <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
+              <Text style={styles.backTxt}>← Retour</Text>
+            </Pressable>
+          ) : null}
+
           <View style={styles.hero}>
             <Text style={styles.brand}>HYDRA</Text>
             <Text style={styles.tag}>
-              Dernière étape : crée ton compte pour sauvegarder ta progression et
-              retrouver ta barre sur tous tes appareils.
+              {mode === 'signIn'
+                ? 'Reconnecte-toi pour retrouver ta progression et ton abonnement.'
+                : 'Dernière étape : crée ton compte pour sauvegarder ta progression et retrouver ta barre sur tous tes appareils.'}
             </Text>
           </View>
 
@@ -155,6 +168,8 @@ export function AuthScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   scroll: { padding: 24, paddingTop: 60, gap: 14, minHeight: '100%' },
+  back: { alignSelf: 'flex-start', marginBottom: 8 },
+  backTxt: { color: C.textDim, fontFamily: FONTS.mono, fontSize: 13 },
   hero: { alignItems: 'center', marginBottom: 30 },
   brand: {
     color: C.segmentFull,
