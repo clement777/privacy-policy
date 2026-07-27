@@ -97,6 +97,11 @@
   .accent-row{display:flex;gap:10px;}
   .accentbtn{width:34px;height:34px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;}
   .accentbtn.on{border-color:var(--text);}
+  .segbtns{display:flex;gap:8px;}
+  .segbtn{flex:1;background:transparent;border:1px solid var(--line);color:var(--dim);
+    border-radius:10px;padding:11px 8px;font-family:'Chakra';font-size:12px;letter-spacing:1.5px;
+    cursor:pointer;text-transform:uppercase;}
+  .segbtn.on{border-color:var(--green);color:var(--green);}
   .slidelist{display:flex;flex-direction:column;gap:8px;}
   .slide-row{border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
   .slide-row .row-top{display:flex;align-items:center;gap:10px;}
@@ -104,20 +109,36 @@
   .slide-row .preview{flex:1;font-size:12px;color:var(--text);overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;}
   .slide-row .preview.empty{color:var(--dim);font-style:italic;}
+  .slide-row .pin{font-size:12px;}
   .slide-row button{background:transparent;border:1px solid var(--line);color:var(--text);
     border-radius:8px;padding:6px 10px;font-family:'Chakra';font-size:11px;letter-spacing:1px;
     cursor:pointer;text-transform:uppercase;white-space:nowrap;}
   .slide-row button.rm{border-color:var(--red);color:var(--red);padding:6px 8px;}
   .slide-row button.sel.on{border-color:var(--green);color:var(--green);}
-  .slide-editor{margin-top:10px;}
-  .slide-editor textarea{min-height:96px;}
-  .slide-editor .hint{margin-top:4px;}
+  .slide-editor{margin-top:10px;display:flex;flex-direction:column;gap:10px;}
+  .slide-editor textarea{min-height:88px;}
+  .slide-editor .sublabel{font-size:10px;letter-spacing:2px;color:var(--dim);
+    text-transform:uppercase;margin-bottom:6px;}
+  .imgrow{display:flex;gap:8px;align-items:center;}
+  .imgrow .thumb{width:52px;height:52px;border-radius:8px;object-fit:cover;
+    border:1px solid var(--line);background:#000;}
+  .imgrow button{flex:1;}
   .addslide{width:100%;}
 </style>
 </head>
 <body>
   <div class="panel">
     <div class="brandhead">HYDR<b>A</b><span>STUDIO DE CARROUSELS</span></div>
+
+    <div>
+      <label>Thème</label>
+      <div class="segbtns" id="themerow">
+        <button class="segbtn" data-theme="light">☀ Clair</button>
+        <button class="segbtn on" data-theme="dark">🌙 Sombre</button>
+      </div>
+      <div class="hint">Le <b>clair</b> ressort mieux dans un feed TikTok ; le <b>sombre</b> colle
+        à la charte de l'app. Teste les deux et garde celui qui performe.</div>
+    </div>
 
     <div>
       <label>Accent</label>
@@ -127,13 +148,12 @@
         <button class="accentbtn" data-accent="amber" style="background:#FFB020"></button>
         <button class="accentbtn" data-accent="poison" style="background:#B44CFF"></button>
       </div>
-      <div class="hint">Même couleur pour tout le carrousel. Utilise <code>*mot*</code>
-        dans un texte de slide pour colorer ce mot en accent.</div>
+      <div class="hint">Utilise <code>*mot*</code> dans un texte pour le colorer en accent.</div>
     </div>
 
     <div>
       <label>Eyebrow (affiché sur chaque slide)</label>
-      <input type="text" id="eyebrow" value="HYDRA · HYDRATATION">
+      <input type="text" id="eyebrow" value="HYDRA · CLASSEMENT">
     </div>
 
     <div class="divider"></div>
@@ -142,8 +162,9 @@
       <label>Slides du carrousel</label>
       <div class="slidelist" id="slidelist"></div>
       <button class="folderbtn addslide" id="addslide" style="margin-top:10px">+ Ajouter un slide</button>
-      <div class="hint">Clique <b>Sélectionner</b> sur une slide pour ouvrir son éditeur
-        et taper son texte. Le nombre d'images générées = le nombre de slides non vides.</div>
+      <div class="hint">Clique <b>Sélectionner</b> pour ouvrir une slide : titre court (le gros mot),
+        image, et texte. Le titre et l'image sont facultatifs.
+        Photos gratuites sur <code>unsplash.com</code> ou <code>pexels.com</code>.</div>
     </div>
 
     <div class="divider"></div>
@@ -160,8 +181,7 @@
       <button class="folderbtn" id="pickdir">📁 Choisir le dossier Drive…</button>
       <div class="hint" id="dirhint">Optionnel : choisis ton dossier <b>« carrousels hydra »</b>
         (dans Google&nbsp;Drive) une seule fois. <b>Seuls</b> les fichiers du studio y
-        seront enregistrés — tes autres téléchargements ne bougent pas. Sinon, ils
-        partent dans ton dossier Téléchargements habituel.</div>
+        seront enregistrés. Sinon, ils partent dans ton dossier Téléchargements.</div>
     </div>
 
     <button class="gen" id="generate">✦ Générer le carrousel</button>
@@ -176,7 +196,7 @@
         téléchargements », accepte une fois.</div>
 
       <div style="margin-top:16px">
-        <label>Légende du post (Instagram / TikTok)</label>
+        <label>Légende du post</label>
         <textarea id="caption" style="min-height:150px"
           placeholder="Colle ou écris ici la légende complète du post."></textarea>
         <div class="row">
@@ -192,13 +212,20 @@
 <script>
   const FMT = { w:1080, h:1350 };
   const ACCENTS = { green:'#3EE07A', red:'#FF3B4A', amber:'#FFB020', poison:'#B44CFF' };
-  const COL = { bg:'#000000', empty:'#1C2026', text:'#EDEFF2', dim:'#7C828C' };
+  // Sur fond clair, le vert vif manque de contraste : on prend la version profonde.
+  const ACCENTS_LIGHT = { green:'#12A150', red:'#E02233', amber:'#B87400', poison:'#8B2FD6' };
+  const THEMES = {
+    dark:  { bg:'#0A0C10', text:'#EDEFF2', dim:'#7C828C', empty:'#1C2026', glow:true  },
+    light: { bg:'#FFFFFF', text:'#0A0C10', dim:'#6B7280', empty:'#E5E7EB', glow:false },
+  };
 
   // ---- state ----
-  let slides = [''];      // texte de chaque slide (dans l'ordre)
-  let openIndex = 0;      // slide dont l'éditeur est ouvert (null = aucune)
+  // slide = { title, text, img }  (img = HTMLImageElement déjà chargée, ou null)
+  let slides = [{ title:'', text:'', img:null }];
+  let openIndex = 0;
   let accent = 'green';
-  let renderedTotal = 0;  // nb d'images réellement générées (pour les downloads)
+  let theme = 'dark';
+  let renderedTotal = 0;
 
   const eyebrowEl = document.getElementById('eyebrow');
   const ctaEl     = document.getElementById('cta');
@@ -210,75 +237,133 @@
     statusEl.textContent = msg;
     statusEl.className = 'aistatus' + (cls ? ' ' + cls : '');
   }
+  function accentColor(){
+    return theme === 'light'
+      ? (ACCENTS_LIGHT[accent] || ACCENTS[accent])
+      : ACCENTS[accent];
+  }
 
-  // ---- accent picker ----
+  // ---- pickers ----
   document.querySelectorAll('.accentbtn').forEach(btn => {
     btn.addEventListener('click', () => {
       accent = btn.dataset.accent;
       document.querySelectorAll('.accentbtn').forEach(b => b.classList.toggle('on', b === btn));
     });
   });
+  document.querySelectorAll('.segbtn[data-theme]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      theme = btn.dataset.theme;
+      document.querySelectorAll('.segbtn[data-theme]').forEach(b => b.classList.toggle('on', b === btn));
+    });
+  });
 
-  // ---- slide list (add / remove / select-to-edit) ----
+  // ---- slide list ----
   function renderSlideList(){
     listEl.innerHTML = '';
-    slides.forEach((text, i) => {
+    slides.forEach((s, i) => {
       const row = document.createElement('div');
       row.className = 'slide-row';
-      const preview = text.trim() ? text.trim().slice(0, 46) : '(vide)';
+      const label = (s.title || s.text || '').trim();
+      const preview = label ? label.slice(0, 40) : '(vide)';
       row.innerHTML = `
         <div class="row-top">
           <span class="idx">SLIDE ${i + 1}</span>
-          <span class="preview${text.trim() ? '' : ' empty'}">${preview.replace(/</g,'&lt;')}</span>
+          <span class="pin">${s.img ? '🖼' : ''}</span>
+          <span class="preview${label ? '' : ' empty'}">${preview.replace(/</g,'&lt;')}</span>
           <button class="sel${openIndex === i ? ' on' : ''}" data-i="${i}">Sélectionner</button>
           <button class="rm" data-rm="${i}" ${slides.length <= 1 ? 'disabled' : ''}>✕</button>
         </div>`;
       if(openIndex === i){
-        const editWrap = document.createElement('div');
-        editWrap.className = 'slide-editor';
-        editWrap.innerHTML = `
-          <textarea data-edit="${i}" placeholder="Texte de la slide ${i + 1}…">${text}</textarea>
-          <div class="hint">Entoure un mot de <code>*astérisques*</code> pour le colorer en accent.</div>`;
-        row.appendChild(editWrap);
+        const ed = document.createElement('div');
+        ed.className = 'slide-editor';
+        ed.innerHTML = `
+          <div>
+            <div class="sublabel">Titre court (facultatif)</div>
+            <input type="text" data-title="${i}" value="${(s.title||'').replace(/"/g,'&quot;')}"
+              placeholder="ex. LE LAIT">
+          </div>
+          <div>
+            <div class="sublabel">Image (facultatif)</div>
+            <div class="imgrow">
+              ${s.img ? `<img class="thumb" src="${s.img.src}">` : ''}
+              <button data-img="${i}">${s.img ? 'Remplacer' : '＋ Ajouter une image'}</button>
+              ${s.img ? `<button class="rm" data-imgrm="${i}">✕</button>` : ''}
+            </div>
+          </div>
+          <div>
+            <div class="sublabel">Texte</div>
+            <textarea data-edit="${i}" placeholder="Texte de la slide ${i + 1}…">${s.text || ''}</textarea>
+          </div>`;
+        row.appendChild(ed);
       }
       listEl.appendChild(row);
     });
 
-    listEl.querySelectorAll('[data-i]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        const i = Number(btn.dataset.i);
+    listEl.querySelectorAll('[data-i]').forEach(b =>
+      b.addEventListener('click', () => {
+        const i = Number(b.dataset.i);
         openIndex = openIndex === i ? null : i;
         renderSlideList();
       }));
-    listEl.querySelectorAll('[data-rm]').forEach(btn =>
-      btn.addEventListener('click', () => {
+    listEl.querySelectorAll('[data-rm]').forEach(b =>
+      b.addEventListener('click', () => {
         if(slides.length <= 1) return;
-        const i = Number(btn.dataset.rm);
+        const i = Number(b.dataset.rm);
         slides.splice(i, 1);
         if(openIndex === i) openIndex = null;
         else if(openIndex !== null && openIndex > i) openIndex--;
         renderSlideList();
       }));
+    listEl.querySelectorAll('[data-title]').forEach(inp =>
+      inp.addEventListener('input', () => {
+        slides[Number(inp.dataset.title)].title = inp.value;
+      }));
     listEl.querySelectorAll('[data-edit]').forEach(ta =>
       ta.addEventListener('input', () => {
-        slides[Number(ta.dataset.edit)] = ta.value;
-        // met à jour juste l'aperçu texte sans reconstruire (perdrait le focus)
+        const i = Number(ta.dataset.edit);
+        slides[i].text = ta.value;
         const row = ta.closest('.slide-row');
         const prev = row.querySelector('.preview');
-        const t = ta.value.trim();
-        prev.textContent = t ? t.slice(0, 46) : '(vide)';
+        const t = (slides[i].title || ta.value).trim();
+        prev.textContent = t ? t.slice(0, 40) : '(vide)';
         prev.classList.toggle('empty', !t);
+      }));
+    listEl.querySelectorAll('[data-img]').forEach(b =>
+      b.addEventListener('click', () => pickImage(Number(b.dataset.img))));
+    listEl.querySelectorAll('[data-imgrm]').forEach(b =>
+      b.addEventListener('click', () => {
+        slides[Number(b.dataset.imgrm)].img = null;
+        renderSlideList();
       }));
   }
   renderSlideList();
 
   document.getElementById('addslide').addEventListener('click', () => {
-    slides.push('');
+    slides.push({ title:'', text:'', img:null });
     openIndex = slides.length - 1;
     renderSlideList();
   });
 
-  // ---- canvas drawing (même grammaire visuelle que post-studio.html) ----
+  // Charge une image locale en objet Image prêt à dessiner sur le canvas.
+  function pickImage(i){
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.addEventListener('change', () => {
+      const file = inp.files && inp.files[0];
+      if(!file) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => { slides[i].img = img; renderSlideList(); };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+    inp.click();
+  }
+
+  // ---- canvas ----
   function roundRect(ctx,x,y,w,h,r){
     ctx.beginPath();
     if(ctx.roundRect){ ctx.roundRect(x,y,w,h,r); }
@@ -288,7 +373,7 @@
     }
   }
   function tokenize(text){
-    const parts = text.replace(/&nbsp;/g,' ').split('*');
+    const parts = (text || '').replace(/&nbsp;/g,' ').split('*');
     const tokens = [];
     parts.forEach((part,i)=>{
       const acc = i % 2 === 1;
@@ -309,108 +394,167 @@
     if(line.length) lines.push(line);
     return lines.map(l => { while(l.length && l[l.length-1].space) l.pop(); return l; });
   }
-  function drawTokens(ctx, line, x, y, accentCol){
+  function drawTokens(ctx, line, x, y, accentCol, baseCol){
     for(const tk of line){
-      ctx.fillStyle = tk.accent ? accentCol : COL.text;
+      ctx.fillStyle = tk.accent ? accentCol : baseCol;
       ctx.fillText(tk.text, x, y);
       x += ctx.measureText(tk.text).width;
     }
   }
+  // Dessine l'image "contain" dans la boîte donnée, coins arrondis.
+  function drawImageContain(ctx, img, bx, by, bw, bh){
+    const r = Math.min(bw / img.width, bh / img.height);
+    const w = img.width * r, h = img.height * r;
+    const x = bx + (bw - w) / 2, y = by + (bh - h) / 2;
+    ctx.save();
+    roundRect(ctx, x, y, w, h, 20);
+    ctx.clip();
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+  }
 
-  function drawSlide(canvas, text, idx, total){
+  function drawSlide(canvas, slide, idx, total){
     const ctx = canvas.getContext('2d');
-    const accCol = ACCENTS[accent];
+    const T = THEMES[theme];
+    const accCol = accentColor();
     const isFirst = idx === 0, isLast = idx === total - 1;
     canvas.width = FMT.w; canvas.height = FMT.h;
 
-    ctx.fillStyle = COL.bg; ctx.fillRect(0,0,FMT.w,FMT.h);
+    // fond (+ halo d'accent discret en thème sombre, pour casser le noir plat)
+    ctx.fillStyle = T.bg; ctx.fillRect(0,0,FMT.w,FMT.h);
+    if(T.glow){
+      const g = ctx.createRadialGradient(FMT.w/2, FMT.h*0.78, 0, FMT.w/2, FMT.h*0.78, FMT.w*0.9);
+      g.addColorStop(0, accCol + '26');
+      g.addColorStop(1, accCol + '00');
+      ctx.fillStyle = g; ctx.fillRect(0,0,FMT.w,FMT.h);
+    }
     ctx.textBaseline = 'alphabetic';
 
     const padH = 84;
     const contentW = FMT.w - 2*padH;
 
-    // --- barre de progression du carrousel (8 segments, remplis selon idx/total) ---
+    // barre de progression du carrousel
     const barY = 92, segH = 14, gap = 10;
     const segW = (contentW - 7*gap) / 8;
     const filled = Math.max(1, Math.round(((idx + 1) / total) * 8));
     for(let i=0;i<8;i++){
       roundRect(ctx, padH + i*(segW+gap), barY, segW, segH, 4);
-      ctx.fillStyle = i < filled ? accCol : COL.empty;
+      ctx.fillStyle = i < filled ? accCol : T.empty;
       ctx.fill();
     }
 
-    // --- eyebrow + numéro de slide ---
-    const ebY = barY + segH + 66;
+    // eyebrow + numéro de slide
+    const ebY = barY + segH + 62;
     const ebText = (eyebrowEl.value || '').toUpperCase() + `   ${idx + 1}/${total}`;
     ctx.font = "700 26px Chakra"; ctx.letterSpacing = "6px";
     let ex = padH;
     for(const ch of ebText){
-      ctx.fillStyle = (ch === '·') ? accCol : COL.dim;
+      ctx.fillStyle = (ch === '·') ? accCol : T.dim;
       ctx.fillText(ch, ex, ebY);
       ex += ctx.measureText(ch).width;
     }
 
-    // --- corps du texte (taille selon le rôle de la slide) ---
-    const fontSize = isFirst ? 72 : (isLast ? 58 : 50);
-    ctx.font = `700 ${fontSize}px Chakra`; ctx.letterSpacing = "0.5px";
-    const lines = wrapTokens(ctx, tokenize(text || ''), contentW);
-    const lineH = fontSize * 1.2;
-    const blockH = lines.length * lineH;
-    const areaTop = ebY + 50, areaBottom = FMT.h - 260;
-    const startY = areaTop + Math.max(0, (areaBottom - areaTop - blockH) / 2);
-    lines.forEach((line, i) => {
-      drawTokens(ctx, line, padH, startY + i*lineH + fontSize*0.82, accCol);
-    });
+    // ---- zone de contenu : titre / image / texte, empilés et centrés ----
+    const areaTop = ebY + 46;
+    const areaBottom = isLast ? FMT.h - 250 : FMT.h - 140;
+    const areaH = areaBottom - areaTop;
 
-    // --- brand (bas de chaque slide) ---
+    const hasTitle = !!(slide.title || '').trim();
+    const hasImg   = !!slide.img;
+
+    // titre
+    let titleLines = [], titleFont = 0, titleH = 0;
+    if(hasTitle){
+      titleFont = isFirst ? 74 : 62;
+      ctx.font = `700 ${titleFont}px Chakra`; ctx.letterSpacing = "0.5px";
+      titleLines = wrapTokens(ctx, tokenize(slide.title), contentW);
+      titleH = titleLines.length * titleFont * 1.16;
+    }
+
+    // texte : gros s'il porte la slide seul, plus discret sous un titre
+    const bodyFont = hasTitle ? 40 : (isFirst ? 70 : (isLast ? 56 : 50));
+    ctx.font = `700 ${bodyFont}px Chakra`; ctx.letterSpacing = "0.5px";
+    const bodyLines = wrapTokens(ctx, tokenize(slide.text), contentW);
+    const bodyH = bodyLines.length * bodyFont * 1.22;
+
+    const gapV = 34;
+    let imgH = 0;
+    if(hasImg){
+      const used = titleH + bodyH + (hasTitle ? gapV : 0) + (bodyLines.length ? gapV : 0);
+      imgH = Math.max(0, Math.min(areaH - used, areaH * 0.46));
+    }
+
+    const blockH = titleH + (hasTitle && (imgH || bodyH) ? gapV : 0)
+                 + imgH + (imgH && bodyH ? gapV : 0) + bodyH;
+    let y = areaTop + Math.max(0, (areaH - blockH) / 2);
+
+    if(hasTitle){
+      ctx.font = `700 ${titleFont}px Chakra`; ctx.letterSpacing = "0.5px";
+      titleLines.forEach((line, i) => {
+        drawTokens(ctx, line, padH, y + i*(titleFont*1.16) + titleFont*0.82, accCol, T.text);
+      });
+      y += titleH + ((imgH || bodyH) ? gapV : 0);
+    }
+    if(imgH > 0){
+      drawImageContain(ctx, slide.img, padH, y, contentW, imgH);
+      y += imgH + (bodyH ? gapV : 0);
+    }
+    if(bodyH > 0){
+      ctx.font = `700 ${bodyFont}px Chakra`; ctx.letterSpacing = "0.5px";
+      bodyLines.forEach((line, i) => {
+        drawTokens(ctx, line, padH, y + i*(bodyFont*1.22) + bodyFont*0.82, accCol, T.text);
+      });
+    }
+
+    // marque (bas de chaque slide)
     ctx.letterSpacing = "8px"; ctx.font = "700 22px Chakra";
     const brandY = FMT.h - 72;
-    ctx.fillStyle = COL.dim; ctx.fillText("HYDR", padH, brandY);
+    ctx.fillStyle = T.dim; ctx.fillText("HYDR", padH, brandY);
     const wHYDR = ctx.measureText("HYDR").width;
-    ctx.fillStyle = COL.text; ctx.fillText("A", padH + wHYDR, brandY);
+    ctx.fillStyle = T.text; ctx.fillText("A", padH + wHYDR, brandY);
 
-    // --- CTA (uniquement sur la dernière slide) ---
+    // CTA (dernière slide uniquement)
     if(isLast){
       const ctaY = brandY - 60;
-      ctx.strokeStyle = COL.empty; ctx.lineWidth = 2;
+      ctx.strokeStyle = T.empty; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(padH, ctaY - 44); ctx.lineTo(FMT.w - padH, ctaY - 44); ctx.stroke();
       ctx.letterSpacing = "2px"; ctx.font = "700 26px Chakra";
       ctx.fillStyle = accCol; ctx.fillText("↓", padH, ctaY);
       const wArrow = ctx.measureText("↓").width + 18;
-      ctx.fillStyle = COL.text;
+      ctx.fillStyle = T.text;
       ctx.fillText((ctaEl.value || '').toUpperCase(), padH + wArrow, ctaY);
     }
     ctx.letterSpacing = "0px";
   }
 
   function renderStage(){
-    const texts = slides.map(s => s.trim()).filter(Boolean);
-    if(texts.length === 0){
-      setStatus('Ajoute au moins un texte de slide avant de générer.', 'err');
+    const used = slides.filter(s => (s.title || '').trim() || (s.text || '').trim() || s.img);
+    if(used.length === 0){
+      setStatus('Ajoute au moins un titre, un texte ou une image avant de générer.', 'err');
       return false;
     }
     stageEl.innerHTML = '';
-    texts.forEach((text, i) => {
+    used.forEach((s, i) => {
       const wrap = document.createElement('div');
       wrap.className = 'prev';
-      wrap.innerHTML = `<span class="ptag">SLIDE ${i + 1}/${texts.length}</span>
+      wrap.innerHTML = `<span class="ptag">SLIDE ${i + 1}/${used.length}</span>
         <canvas id="cv-${i}"></canvas>`;
       stageEl.appendChild(wrap);
-      drawSlide(wrap.querySelector('canvas'), text, i, texts.length);
+      drawSlide(wrap.querySelector('canvas'), s, i, used.length);
     });
-    renderedTotal = texts.length;
+    renderedTotal = used.length;
     return true;
   }
 
-  document.getElementById('generate').addEventListener('click', async () => {
+  document.getElementById('generate').addEventListener('click', () => {
     if(!renderStage()) return;
     document.getElementById('results').hidden = false;
     setStatus(`✓ ${renderedTotal} image(s) générée(s). Vérifie l'aperçu avant d'enregistrer.`, 'ok');
   });
 
-  // ---- slug (pour nommer les fichiers) ----
+  // ---- nommage des fichiers ----
   function slug(){
-    const base = (slides.find(s => s.trim()) || 'carrousel');
+    const base = slides.map(s => s.title || s.text).find(t => (t || '').trim()) || 'carrousel';
     const t = base.normalize('NFD').replace(/[̀-ͯ]/g, '')
       .toLowerCase().replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
@@ -419,7 +563,7 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const pad2 = n => String(n).padStart(2, '0');
 
-  // ---- dossier de sauvegarde (File System Access API) — identique à post-studio.html ----
+  // ---- dossier de sauvegarde (File System Access API) ----
   let dirHandle = null;
   const pickBtn = document.getElementById('pickdir');
   const dirHint = document.getElementById('dirhint');
@@ -456,8 +600,7 @@
   if(!FS_OK){
     pickBtn.style.display = 'none';
     dirHint.innerHTML = 'Les fichiers partent dans ton dossier Téléchargements habituel ' +
-      '(ce navigateur ne permet pas de choisir un dossier dédié — sur ordinateur, ' +
-      'utilise Chrome ou Edge pour cette option).';
+      '(sur ordinateur, utilise Chrome ou Edge pour choisir un dossier dédié).';
   } else {
     pickBtn.addEventListener('click', async () => {
       try {
@@ -501,7 +644,7 @@
     return false;
   }
 
-  // ---- downloads ----
+  // ---- téléchargements ----
   function canvasBlob(canvas){
     return new Promise(res => canvas.toBlob(res, 'image/png'));
   }
@@ -535,8 +678,6 @@
   });
   document.getElementById('dl-caption').addEventListener('click', downloadCaption);
 
-  // Attend que la police embarquée soit prête avant le premier rendu (sinon les
-  // mesures de texte utilisent une police de repli et le retour à la ligne saute).
   document.fonts.load("700 72px Chakra").then(() => {}).catch(() => {});
 </script>
 </body>
