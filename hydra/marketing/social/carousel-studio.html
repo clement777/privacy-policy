@@ -131,6 +131,32 @@
     <div class="brandhead">HYDR<b>A</b><span>STUDIO DE CARROUSELS</span></div>
 
     <div>
+      <label>Clé API Anthropic</label>
+      <input type="password" id="apikey" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      <div class="hint">Stockée <b>uniquement dans ce navigateur</b> (localStorage), envoyée
+        seulement à Anthropic. Jamais publiée sur GitHub. Clé sur
+        <code>console.anthropic.com</code>.</div>
+    </div>
+
+    <div>
+      <label>Sujet du carrousel (la seule chose à écrire)</label>
+      <textarea id="topic" placeholder="Ex. : 10 boissons classées de la pire à la meilleure pour l'hydratation"></textarea>
+      <div class="hint">Claude fait la recherche scientifique (web search), puis génère les titres
+        et les textes de <b>chaque slide</b>, avec la mécanique classement/cliffhanger qui retient
+        jusqu'au bout — <b>à toi de glisser les images</b> ensuite.</div>
+    </div>
+
+    <div>
+      <label>Nombre de slides</label>
+      <input type="text" id="slidecount" value="10">
+    </div>
+
+    <button class="gen" id="ai-generate">✦ Générer le texte avec l'IA</button>
+    <div class="aistatus" id="ai-status"></div>
+
+    <div class="divider"></div>
+
+    <div>
       <label>Thème</label>
       <div class="segbtns" id="themerow">
         <button class="segbtn" data-theme="light">☀ Clair</button>
@@ -742,6 +768,173 @@
     setTimeout(() => { btn.textContent = old; }, 1200);
   });
   document.getElementById('dl-caption').addEventListener('click', downloadCaption);
+
+  // ---- IA : génération du texte via l'API Claude (Anthropic) ----
+  // Fichier 100% autonome : l'appel part directement du navigateur vers
+  // api.anthropic.com. La clé n'est JAMAIS écrite dans le fichier ni commit —
+  // elle vit seulement dans le localStorage de ce navigateur (même clé de
+  // stockage que post-studio.html, donc partagée entre les deux outils).
+  const KEY_LS    = 'hydra.anthropic.key';
+  const apikeyEl  = document.getElementById('apikey');
+  const topicEl   = document.getElementById('topic');
+  const countEl   = document.getElementById('slidecount');
+  const aiGenBtn  = document.getElementById('ai-generate');
+  const aiStatus  = document.getElementById('ai-status');
+
+  apikeyEl.value = localStorage.getItem(KEY_LS) || '';
+  apikeyEl.addEventListener('change', () =>
+    localStorage.setItem(KEY_LS, apikeyEl.value.trim()));
+
+  function setAiStatus(msg, cls){
+    aiStatus.textContent = msg;
+    aiStatus.className = 'aistatus' + (cls ? ' ' + cls : '');
+  }
+
+  // Encode toute la méthode qu'on a validée à la main : classement pire→meilleur
+  // (ou chronologie), hook avec promesse de nombre, chaque slide coupée en plein
+  // élan (jamais de phrase qui se termine proprement, sauf la dernière), un twist
+  // placé au milieu (la rétention chute vers les slides 5-6), et le produit
+  // intégré comme UNE ÉTAPE de la méthode sur la dernière slide — jamais une pub
+  // plaquée à la fin (méthode "Étape par étape", Robin Dormion).
+  const CAROUSEL_SYSTEM_PROMPT = `Tu es le copywriter scientifique de HYDRA, une app d'hydratation au ton BRUTAL, MINIMALISTE, DIRECT — jamais "wellness", jamais d'émojis dégoulinants, aucune émotion cucul. Marque vidéoludique (barre de vie qui se vide, l'alcool est un "poison").
+
+MISSION : à partir d'un sujet, tu produis un carrousel TikTok/Instagram complet, structuré pour retenir l'audience jusqu'à la dernière slide.
+
+MÉTHODE :
+1. Utilise l'outil web_search pour VÉRIFIER les faits (mécanismes physiologiques, études, indices comme le Beverage Hydration Index, échelle d'Armstrong). Ne cite jamais un chiffre précis sans l'avoir vérifié — reste qualitatif si un chiffre exact est incertain.
+2. Structure en CLASSEMENT (pire → meilleur, JAMAIS l'inverse) si le sujet s'y prête, sinon en CHRONOLOGIE (heure par heure). Le nombre d'items doit être annoncé dès la 1ère slide.
+3. RÉTENTION — règles non négociables :
+   - Slide 1 : annonce le nombre exact et promet une surprise (le n°1/la fin "va te surprendre"), sans jamais révéler la réponse.
+   - Chaque slide, SAUF LA DERNIÈRE, se termine EN PLEIN ÉLAN : une question, un "mais", "sauf que", "et pourtant" qui n'est résolu que par la slide suivante. Aucune phrase ne doit se sentir "complète" avant la dernière slide.
+   - Place le fait le plus contre-intuitif vers le MILIEU du carrousel (slide 5-6 sur 10), pas à la fin — c'est là que l'attention décroche naturellement.
+   - La DERNIÈRE slide révèle le twist final ET intègre HYDRA comme une étape naturelle de la méthode (jamais un CTA plaqué, jamais "je te recommande" ou un avis personnel — HYDRA est mentionnée factuellement, ex: "HYDRA calcule ça pour toi"). Termine par l'appel à l'action doux : "Liste d'attente en bio."
+4. INTERDIT : toute formulation à la première personne suggérant un usage/témoignage personnel de l'app ("j'utilise", "depuis que je...", "mon avis"). C'est de l'IA, pas un témoignage — HYDRA est présentée de façon factuelle/informative uniquement.
+5. Utilise *astérisques* autour d'UN mot ou chiffre par slide maximum, pour qu'il soit coloré en accent.
+
+TU RENDS UNIQUEMENT un objet JSON valide (aucun texte autour, aucune balise markdown), avec EXACTEMENT ces clés :
+{
+  "eyebrow": "court label en majuscules pour le haut de chaque slide, ex: HYDRA · CLASSEMENT",
+  "accent": "une seule valeur parmi: green, red, amber, poison. green=conseil positif · red=mythe cassé/alerte · amber=nuance · poison=sujet alcool.",
+  "cta": "phrase COURTE en MAJUSCULES pour la flèche en bas de la dernière slide, ex: REJOINS LA LISTE D'ATTENTE — LIEN EN BIO",
+  "slides": [
+    { "title": "titre court MAJUSCULE de la slide (le gros mot, ex: #10 · SPIRITUEUX), ou vide si pas pertinent", "text": "le texte de la slide, coupé en plein élan sauf la dernière (2-4 phrases courtes)" }
+  ],
+  "caption_instagram": "légende Instagram complète (150-280 mots) : reprend le classement en resumé, explique le mécanisme scientifique, synthèse actionnable, puis CTA vers la liste d'attente (https://hydra-landing-sooty.vercel.app) + 4-6 hashtags.",
+  "caption_tiktok": "légende TikTok (60-120 mots, phrases très courtes, punchy), même structure condensée, CTA \"lien en bio\" (pas de lien cliquable sur TikTok) + 3-5 hashtags."
+}
+Le tableau "slides" doit contenir EXACTEMENT le nombre de slides demandé par l'utilisateur.`;
+
+  // Les légendes contiennent des retours à la ligne ; si le modèle les émet
+  // bruts (non échappés) dans le JSON, on les répare avant de parser.
+  function escapeCtrlInStrings(json){
+    let out = '', inStr = false, esc = false;
+    for(const ch of json){
+      if(inStr && !esc && (ch === '\n' || ch === '\r' || ch === '\t')){
+        out += ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : '';
+        continue;
+      }
+      out += ch;
+      if(esc){ esc = false; }
+      else if(ch === '\\'){ esc = true; }
+      else if(ch === '"'){ inStr = !inStr; }
+    }
+    return out;
+  }
+  function extractJSON(text){
+    const s = text.indexOf('{');
+    const e = text.lastIndexOf('}');
+    if(s === -1 || e === -1 || e < s) throw new Error('Réponse sans JSON exploitable.');
+    const raw = text.slice(s, e + 1);
+    try { return JSON.parse(raw); }
+    catch(_){ return JSON.parse(escapeCtrlInStrings(raw)); }
+  }
+
+  async function callClaude(topic, count, key){
+    const messages = [{
+      role:'user',
+      content:`Sujet du carrousel : ${topic}\nNombre de slides exact : ${count}`,
+    }];
+    // Boucle serveur de web_search : si stop_reason === "pause_turn", on renvoie
+    // la réponse partielle pour laisser Claude continuer ses recherches.
+    for(let i = 0; i < 6; i++){
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{
+          'content-type':'application/json',
+          'x-api-key': key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true',
+        },
+        body: JSON.stringify({
+          model:'claude-opus-4-8',
+          max_tokens:6000,
+          tools:[{ type:'web_search_20260209', name:'web_search' }],
+          system: CAROUSEL_SYSTEM_PROMPT,
+          messages,
+        }),
+      });
+      if(!resp.ok){
+        let detail = '';
+        try { detail = (await resp.json())?.error?.message || ''; } catch(_){}
+        throw new Error(`API ${resp.status}${detail ? ' — ' + detail : ''}`);
+      }
+      const data = await resp.json();
+      if(data.stop_reason === 'pause_turn'){
+        messages.push({ role:'assistant', content:data.content });
+        continue;
+      }
+      return (data.content || [])
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('\n')
+        .trim();
+    }
+    throw new Error('Recherche trop longue — réessaie.');
+  }
+
+  aiGenBtn.addEventListener('click', async () => {
+    const key   = apikeyEl.value.trim();
+    const topic = topicEl.value.trim();
+    const count = Math.max(3, Math.min(15, parseInt(countEl.value, 10) || 10));
+    if(!key){   setAiStatus('Colle d\'abord ta clé API Anthropic.', 'err'); return; }
+    if(!topic){ setAiStatus('Écris le sujet du carrousel.', 'err'); return; }
+    localStorage.setItem(KEY_LS, key);
+
+    aiGenBtn.disabled = true;
+    setAiStatus(`Recherche scientifique + rédaction de ${count} slides… (30-90 s)`);
+    try {
+      const raw = await callClaude(topic, count, key);
+      const out = extractJSON(raw);
+
+      eyebrowEl.value = out.eyebrow || eyebrowEl.value;
+      if(out.cta) ctaEl.value = String(out.cta).toUpperCase();
+      if(ACCENTS[String(out.accent).toLowerCase()]){
+        accent = String(out.accent).toLowerCase();
+        document.querySelectorAll('.accentbtn').forEach(b =>
+          b.classList.toggle('on', b.dataset.accent === accent));
+      }
+      if(Array.isArray(out.slides) && out.slides.length){
+        // Conserve les images déjà déposées si le nombre de slides n'a pas changé.
+        slides = out.slides.map((s, i) => ({
+          title: s.title || '',
+          text: s.text || '',
+          img: slides[i]?.img || null,
+        }));
+        openIndex = null;
+        renderSlideList();
+      }
+      const capEl = document.getElementById('caption');
+      capEl.value = out.caption_instagram || out.caption_tiktok || capEl.value;
+
+      renderStage();
+      document.getElementById('results').hidden = false;
+      setAiStatus(`✓ ${slides.length} slide(s) rédigée(s) — glisse maintenant une image par slide, vérifie les chiffres, puis génère.`, 'ok');
+    } catch(err){
+      setAiStatus('Erreur : ' + (err.message || err), 'err');
+    } finally {
+      aiGenBtn.disabled = false;
+    }
+  });
 
   document.fonts.load("700 72px Chakra").then(() => {}).catch(() => {});
 </script>
