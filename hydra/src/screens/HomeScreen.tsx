@@ -32,16 +32,22 @@ export function HomeScreen() {
   const [toast, setToast] = useState<string | null>(null);
   const [sportOpen, setSportOpen] = useState(false);
 
-  // Tick every second so the bar drains live and sport/alcohol effects unfold
-  // in real time (sport loss accrues over its duration window).
+  // Tick every second so the countdowns stay second-precise.
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
+  // The physiological state is a far heavier computation than a countdown, and
+  // the bar only drains ~2 mL per minute — recomputing it 60× a minute was
+  // invisible on screen but dominated the main thread (and made every tap feel
+  // sluggish). Quantize its clock to 10 s; the countdowns below keep using the
+  // 1 s `nowMs` because they just subtract from a fixed target timestamp.
+  const stateNow = Math.floor(nowMs / 10_000) * 10_000;
+
   const state = useMemo(
-    () => computeState(events, nowMs, profile),
-    [events, profile, nowMs]
+    () => computeState(events, stateNow, profile),
+    [events, profile, stateNow]
   );
 
   const redAt = useMemo(
@@ -49,30 +55,36 @@ export function HomeScreen() {
       state.redAt ??
       forecastZoneCrossings(
         events,
-        nowMs,
+        stateNow,
         state.levelMl,
         profile,
         DISPLAY_FORECAST_MS
       ).redAt,
-    [events, profile, nowMs, state.levelMl, state.redAt]
+    [events, profile, stateNow, state.levelMl, state.redAt]
   );
 
-  const streak = greenStreak(events, nowMs, state.dailyNeedMl);
+  // The streak only changes on a day boundary, but it walks the whole history
+  // — it was re-running on every single render (no memo at all).
+  const streak = useMemo(
+    () => greenStreak(events, stateNow, state.dailyNeedMl),
+    [events, stateNow, state.dailyNeedMl]
+  );
   const streakLabel =
     streak > 0 ? `🌊 VAGUE ${streak}J` : '🌊 LANCE TA VAGUE';
   const streakHint = vagueHint(state.dailyNeedMl);
 
   const sportSessions = useMemo(
-    () => activeSportSessions(events, nowMs, profile),
-    [events, nowMs, profile]
+    () => activeSportSessions(events, stateNow, profile),
+    [events, stateNow, profile]
   );
   const sportActive = sportSessions.length > 0;
 
   // When the rolling-hour absorption cap is maxed out, the exact instant the
-  // body can take water again — drives the live "attends …" countdown below.
+  // body can take water again — a fixed timestamp, so the countdown that
+  // renders it can still tick every second off `nowMs`.
   const recoverAt = useMemo(
-    () => absorptionRecoveryAt(events, nowMs),
-    [events, nowMs]
+    () => absorptionRecoveryAt(events, stateNow),
+    [events, stateNow]
   );
 
   const showToast = (msg: string) => {

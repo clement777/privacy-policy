@@ -74,6 +74,13 @@ interface HydraState {
 // same type share a millisecond, so type+at is unique and deterministic.
 export const eventKey = (e: HydrationEvent): string => `${e.type}_${e.at}`;
 
+// Rescheduling notifications wipes the whole schedule and re-creates it — a
+// dozen sequential native round-trips. Awaiting that inside a drink tap is what
+// made the buttons feel laggy, and logging several drinks in a row repeated the
+// entire dance each time. Debounce it off the critical path; the timer re-reads
+// the store when it fires, so it always schedules from the latest state.
+let notifTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useHydration = create<HydraState>()(
   persist(
     (set, get) => ({
@@ -245,7 +252,13 @@ export const useHydration = create<HydraState>()(
         });
         await reloadWidgetTimelines();
         await updateAndroidWidgets(events, profile, widget);
-        await rescheduleNotifications(events, profile, widget);
+        // Deliberately NOT awaited — see `notifTimer` above.
+        if (notifTimer) clearTimeout(notifTimer);
+        notifTimer = setTimeout(() => {
+          notifTimer = null;
+          const s = get();
+          rescheduleNotifications(s.events, s.profile, s.widget).catch(() => {});
+        }, 1200);
       },
 
       clearDeleted(keys) {

@@ -274,6 +274,111 @@ function effectiveProfile(
   return p;
 }
 
+// ————————— Derived event data (cached per event-array identity) —————————
+//
+// The integrator samples minute by minute from the first event to `now`. It
+// used to re-scan the FULL event list three times per step (profile / alcohol /
+// sport), re-sort on every call, and recompute the O(n²) absorption credits
+// twice — so cost grew with (days of history × total events) and the app got
+// measurably slower every single day it was used.
+//
+// Everything below depends only on the event list, never on `at`, so it is
+// derived once and cached against the array's identity. The store hands out a
+// new array only when events actually change, so live re-renders all hit the
+// cache. Semantics are unchanged — this is purely avoided repeated work.
+
+interface Derived {
+  sorted: HydrationEvent[];
+  profileEvts: { at: number; patch: Partial<UserProfile> }[];
+  /** Alcohol events with their poison peak precomputed. */
+  alcohol: { at: number; peak: number }[];
+  sport: { at: number; endAt: number; intensity: SportIntensity }[];
+  credited: number[];
+  /**
+   * Results already computed for this exact event list, keyed by timestamp.
+   * The stats screen samples the same fixed instants (start of day + k·30 min)
+   * on every render, and the home screen re-asks for timestamps it has just
+   * asked for — both are near-total cache hits. Bounded, and dropped whenever
+   * the base profile changes since results depend on it.
+   */
+  memo: Map<number, HydrationState>;
+  memoProfile: UserProfile | null;
+}
+
+const MEMO_MAX = 512;
+
+const derivedCache = new WeakMap<HydrationEvent[], Derived>();
+
+function derive(events: HydrationEvent[]): Derived {
+  const hit = derivedCache.get(events);
+  if (hit) return hit;
+
+  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const profileEvts: Derived['profileEvts'] = [];
+  const alcohol: Derived['alcohol'] = [];
+  const sport: Derived['sport'] = [];
+  for (const e of sorted) {
+    if (e.type === 'profile') {
+      profileEvts.push({ at: e.at, patch: e.patch });
+    } else if (e.type === 'alcohol') {
+      alcohol.push({
+        at: e.at,
+        peak: peakPoisonExtra(ethanolGrams(e.volumeMl, e.abv), e.abv),
+      });
+    } else if (e.type === 'sport') {
+      sport.push({
+        at: e.at,
+        endAt: e.at + e.durationMin * 60_000,
+        intensity: e.intensity,
+      });
+    }
+  }
+
+  const d: Derived = {
+    sorted,
+    profileEvts,
+    alcohol,
+    sport,
+    credited: creditedWaterMl(sorted),
+    memo: new Map(),
+    memoProfile: null,
+  };
+  derivedCache.set(events, d);
+  return d;
+}
+
+// Poison multiplier from the pre-extracted alcohol list (sorted ascending, so
+// we can stop as soon as an event is in the future).
+function poisonMultFrom(alcohol: Derived['alcohol'], t: number): number {
+  let extra = 0;
+  for (const a of alcohol) {
+    if (a.at > t) break;
+    const dt = t - a.at;
+    if (dt > POISON_WINDOW_MS) continue;
+    const rise = dt / POISON_PEAK_MS;
+    const fall = (POISON_WINDOW_MS - dt) / POISON_PEAK_MS;
+    extra += a.peak * Math.min(rise, fall);
+  }
+  return Math.min(3.0, 1.0 + extra);
+}
+
+function sportLossFrom(
+  sport: Derived['sport'],
+  t0: number,
+  t1: number,
+  p: UserProfile
+): number {
+  let loss = 0;
+  for (const e of sport) {
+    if (e.at >= t1) break;
+    const s = Math.max(e.at, t0);
+    const en = Math.min(e.endAt, t1);
+    if (en <= s) continue;
+    loss += (sweatRateMlPerHour(p, e.intensity) * (en - s)) / 3600_000;
+  }
+  return loss;
+}
+
 // ————————— Integrator —————————
 
 const STEP_MS = 60_000; // 1-min sampling — accurate enough over 6h horizon.
@@ -308,8 +413,11 @@ function sportLossMlOver(
 }
 
 // Integrate total mL lost between `from` and `to`.
+// Time only moves forward, so the profile is carried across steps behind a
+// pointer and rebuilt solely when a profile event is actually crossed —
+// instead of re-deriving it from the whole event list on every minute.
 function integrateLoss(
-  events: HydrationEvent[],
+  d: Derived,
   from: number,
   to: number,
   baseProfile: UserProfile
@@ -317,13 +425,24 @@ function integrateLoss(
   if (to <= from) return 0;
   let acc = 0;
   let t = from;
+
+  let pi = 0;
+  let p: UserProfile = baseProfile;
+  const applyProfilesUpTo = (at: number) => {
+    while (pi < d.profileEvts.length && d.profileEvts[pi].at <= at) {
+      p = { ...p, ...d.profileEvts[pi].patch };
+      pi++;
+    }
+  };
+  applyProfilesUpTo(from);
+
   while (t < to) {
     const next = Math.min(t + STEP_MS, to);
     const mid = (t + next) / 2;
-    const p = effectiveProfile(events, mid, baseProfile);
-    const poison = poisonMultiplierAt(events, mid);
+    applyProfilesUpTo(mid);
+    const poison = poisonMultFrom(d.alcohol, mid);
     acc += drainMlPerMs(p, poison, isSleeping(mid, p)) * (next - t);
-    acc += sportLossMlOver(events, t, next, p);
+    if (d.sport.length > 0) acc += sportLossFrom(d.sport, t, next, p);
     t = next;
   }
   return acc;
@@ -385,30 +504,43 @@ function fluidIntakeMl(e: HydrationEvent): number {
 // past the cap within the trailing hour is "overflow" — excreted, not stored.
 export function creditedWaterMl(sorted: HydrationEvent[]): number[] {
   const credited: number[] = new Array(sorted.length).fill(0);
-  const hist: { at: number; credited: number }[] = [];
+  // Sliding window over the trailing hour instead of re-summing the whole
+  // history for every event (was O(n²) — the dominant cost once a user had a
+  // few hundred events, and it ran twice per computeState call).
+  const win: { at: number; credited: number }[] = [];
+  let used = 0;
+  let head = 0;
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
     const intake = fluidIntakeMl(e);
     if (intake <= 0) continue;
-    let used = 0;
-    for (const h of hist) {
-      if (h.at > e.at - ABSORB_WINDOW_MS && h.at <= e.at) used += h.credited;
+    while (head < win.length && win[head].at <= e.at - ABSORB_WINDOW_MS) {
+      used -= win[head].credited;
+      head++;
     }
     const remaining = Math.max(0, MAX_WATER_ABSORB_ML_PER_H - used);
     const cred = Math.min(intake, remaining);
     credited[i] = cred;
-    hist.push({ at: e.at, credited: cred });
+    if (cred > 0) {
+      win.push({ at: e.at, credited: cred });
+      used += cred;
+    }
   }
   return credited;
 }
 
 // How much fluid (credited) has been absorbed in the hour ending at `at`.
 export function waterAbsorbedInWindow(sorted: HydrationEvent[], at: number): number {
-  const credited = creditedWaterMl(sorted);
+  return absorbedInWindowFrom(derive(sorted), at);
+}
+
+function absorbedInWindowFrom(d: Derived, at: number): number {
+  const { sorted, credited } = d;
   let used = 0;
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
-    if (e.at > at - ABSORB_WINDOW_MS && e.at <= at) used += credited[i];
+    if (e.at > at) break;
+    if (e.at > at - ABSORB_WINDOW_MS) used += credited[i];
   }
   return used;
 }
@@ -452,12 +584,20 @@ export function computeState(
   at: number,
   baseProfile: UserProfile = DEFAULT_PROFILE
 ): HydrationState {
-  const sorted = [...events].sort((a, b) => a.at - b.at);
+  const d = derive(events);
+  if (d.memoProfile !== baseProfile) {
+    d.memo.clear();
+    d.memoProfile = baseProfile;
+  }
+  const cached = d.memo.get(at);
+  if (cached) return cached;
+
+  const sorted = d.sorted;
   const profileAtNow = effectiveProfile(sorted, at, baseProfile);
   const capNow = dailyNeedMl(profileAtNow);
 
   if (sorted.length === 0) {
-    return {
+    return memoize(d, at, {
       levelMl: capNow,
       dailyNeedMl: capNow,
       levelPct: 100,
@@ -470,11 +610,11 @@ export function computeState(
       absorbedLastHourMl: 0,
       absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
       saturated: false,
-    };
+    });
   }
 
-  // Precompute per-event credited water (rolling hourly absorption cap).
-  const credited = creditedWaterMl(sorted);
+  // Per-event credited water (rolling hourly absorption cap) — from cache.
+  const credited = d.credited;
 
   // Anchor: level starts at capacity at the first event's timestamp.
   const startProfile = effectiveProfile(sorted, sorted[0].at, baseProfile);
@@ -483,30 +623,25 @@ export function computeState(
 
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
-    levelMl -= integrateLoss(sorted, cursor, e.at, baseProfile);
+    levelMl -= integrateLoss(d, cursor, e.at, baseProfile);
     const p = effectiveProfile(sorted, e.at, baseProfile);
     levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), credited[i]);
     cursor = e.at;
   }
-  levelMl -= integrateLoss(sorted, cursor, at, baseProfile);
+  levelMl -= integrateLoss(d, cursor, at, baseProfile);
   levelMl = clamp(levelMl, 0, capNow);
 
-  const poisonMult = poisonMultiplierAt(sorted, at);
+  const poisonMult = poisonMultFrom(d.alcohol, at);
   const poisoned = poisonMult > 1.0;
   const poisonUntil = poisoned ? poisonEndsAt(sorted, at) : null;
   const levelPct = (levelMl / capNow) * 100;
   const zone = zoneOf(levelPct, poisoned);
-  const { ambleAt, redAt } = forecastZoneCrossings(
-    sorted,
-    at,
-    levelMl,
-    baseProfile
-  );
+  const { ambleAt, redAt } = forecastFrom(d, at, levelMl, baseProfile);
 
-  const absorbedLastHourMl = waterAbsorbedInWindow(sorted, at);
+  const absorbedLastHourMl = absorbedInWindowFrom(d, at);
   const saturated = absorbedLastHourMl >= MAX_WATER_ABSORB_ML_PER_H * 0.98;
 
-  return {
+  return memoize(d, at, {
     levelMl,
     dailyNeedMl: capNow,
     levelPct,
@@ -519,7 +654,15 @@ export function computeState(
     absorbedLastHourMl,
     absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
     saturated,
-  };
+  });
+}
+
+function memoize(d: Derived, at: number, s: HydrationState): HydrationState {
+  // Timestamps only ever move forward, so an overflowing map is stale by
+  // definition — clearing wholesale is cheaper than tracking an LRU.
+  if (d.memo.size >= MEMO_MAX) d.memo.clear();
+  d.memo.set(at, s);
+  return s;
 }
 
 // ————————— Forecast when we hit amber / red next —————————
@@ -531,7 +674,17 @@ export function forecastZoneCrossings(
   baseProfile: UserProfile,
   horizonMs: number = 6 * 3600_000
 ): { ambleAt: number | null; redAt: number | null } {
-  const profileNow = effectiveProfile(events, fromAt, baseProfile);
+  return forecastFrom(derive(events), fromAt, startLevelMl, baseProfile, horizonMs);
+}
+
+function forecastFrom(
+  d: Derived,
+  fromAt: number,
+  startLevelMl: number,
+  baseProfile: UserProfile,
+  horizonMs: number = 6 * 3600_000
+): { ambleAt: number | null; redAt: number | null } {
+  const profileNow = effectiveProfile(d.sorted, fromAt, baseProfile);
   const cap = dailyNeedMl(profileNow);
   const amberThresh = cap * 0.55;
   const redThresh = cap * 0.25;
@@ -543,16 +696,27 @@ export function forecastZoneCrossings(
   let level = startLevelMl;
   let t = fromAt;
   const end = fromAt + horizonMs;
+
+  let pi = 0;
+  let p: UserProfile = baseProfile;
+  const applyProfilesUpTo = (upTo: number) => {
+    while (pi < d.profileEvts.length && d.profileEvts[pi].at <= upTo) {
+      p = { ...p, ...d.profileEvts[pi].patch };
+      pi++;
+    }
+  };
+  applyProfilesUpTo(fromAt);
+
   while (t < end) {
     const next = Math.min(t + STEP_MS, end);
     const dt = next - t;
     const mid = (t + next) / 2;
-    const p = effectiveProfile(events, mid, baseProfile);
-    const poison = poisonMultiplierAt(events, mid);
+    applyProfilesUpTo(mid);
+    const poison = poisonMultFrom(d.alcohol, mid);
     const before = level;
     const loss =
       drainMlPerMs(p, poison, isSleeping(mid, p)) * dt +
-      sportLossMlOver(events, t, next, p);
+      (d.sport.length > 0 ? sportLossFrom(d.sport, t, next, p) : 0);
     const after = before - loss;
     // Linearly interpolate the crossing WITHIN this step so the returned
     // timestamp is second-precise — otherwise the live countdown would be
@@ -611,8 +775,9 @@ export function remainingAbsorptionMl(
   events: HydrationEvent[],
   at: number = Date.now()
 ): number {
-  const sorted = [...events].sort((a, b) => a.at - b.at);
-  const used = waterAbsorbedInWindow(sorted, at);
+  // On the drink-tap path — goes through the cache rather than re-sorting and
+  // re-crediting the whole history on every button press.
+  const used = absorbedInWindowFrom(derive(events), at);
   return Math.max(0, MAX_WATER_ABSORB_ML_PER_H - used);
 }
 
@@ -632,8 +797,7 @@ export function absorptionRecoveryAt(
   at: number = Date.now(),
   minRemainingMl: number = MIN_DRINKABLE_ML
 ): number | null {
-  const sorted = [...events].sort((a, b) => a.at - b.at);
-  const credited = creditedWaterMl(sorted);
+  const { sorted, credited } = derive(events);
   // Credited contributions still inside the trailing-hour window, each tagged
   // with the instant it leaves the window (its timestamp + one hour).
   const inWindow: { exitAt: number; ml: number }[] = [];
