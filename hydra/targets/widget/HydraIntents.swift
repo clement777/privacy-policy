@@ -43,8 +43,7 @@ enum HydraStore {
     static func logWater(volumeMl: Double) -> Bool {
         guard var snap = loadRW() else { return false }
         let now = Date().timeIntervalSince1970 * 1000
-        let sorted = snap.events.sorted { $0.at < $1.at }
-        let used = waterAbsorbedInWindow(sorted, now)
+        let used = waterAbsorbedInWindow(snap.events, now)
         if used >= MAX_WATER_ABSORB_ML_PER_H * 0.98 { return false } // saturated
         snap.events.append(HydrationEvent(
             type: .water, at: now, volumeMl: volumeMl, abv: nil,
@@ -83,7 +82,7 @@ struct LogWaterIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         HydraStore.logWater(volumeMl: Double(volumeMl ?? 250))
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: "HydraLockWidget")
         return .result()
     }
 }
@@ -102,7 +101,7 @@ struct LogAlcoholIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         HydraStore.logAlcohol(volumeMl: Double(volumeMl ?? 400), abv: Double(abv ?? 5))
-        WidgetCenter.shared.reloadAllTimelines()
+        WidgetCenter.shared.reloadTimelines(ofKind: "HydraLockWidget")
         return .result()
     }
 }

@@ -246,26 +246,6 @@ func peakPoisonExtra(_ ethanolG: Double, _ abv: Double) -> Double {
     return gramsCurve * concentrationFactor(abv)
 }
 
-private func poisonExtraFromEvent(_ eventAt: TimeInterval, _ ethanolG: Double, _ abv: Double, _ t: TimeInterval) -> Double {
-    let dt = t - eventAt
-    if dt < 0 || dt > POISON_WINDOW_MS { return 0 }
-    let peakExtra = peakPoisonExtra(ethanolG, abv)
-    let rise = dt / POISON_PEAK_MS
-    let fall = (POISON_WINDOW_MS - dt) / POISON_PEAK_MS
-    return peakExtra * min(rise, fall)
-}
-
-private func poisonMultiplierAt(_ events: [HydrationEvent], _ t: TimeInterval) -> Double {
-    var extra: Double = 0
-    for e in events where e.type == .alcohol {
-        guard let vol = e.volumeMl, let abv = e.abv else { continue }
-        if t < e.at || t > e.at + POISON_WINDOW_MS { continue }
-        let g = ethanolGrams(volumeMl: vol, abv: abv)
-        extra += poisonExtraFromEvent(e.at, g, abv, t)
-    }
-    return min(3.0, 1.0 + extra)
-}
-
 private func poisonEndsAt(_ events: [HydrationEvent], _ now: TimeInterval) -> TimeInterval? {
     var end: TimeInterval? = nil
     for e in events where e.type == .alcohol {
@@ -276,12 +256,26 @@ private func poisonEndsAt(_ events: [HydrationEvent], _ now: TimeInterval) -> Ti
 }
 
 private func isSleeping(at ms: TimeInterval, _ p: UserProfile) -> Bool {
-    let d = Date(timeIntervalSince1970: ms / 1000)
-    let c = Calendar.current.dateComponents([.hour, .minute, .second], from: d)
-    let h = Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60 + Double(c.second ?? 0) / 3600
+    // One calendar call (start-of-day) instead of hour/minute/second components.
+    let date = Date(timeIntervalSince1970: ms / 1000)
+    let start = Calendar.current.startOfDay(for: date)
+    let h = date.timeIntervalSince(start) / 3600
     let a = p.sleepStartHour, b = p.sleepEndHour
     if a == b { return false }
     return a < b ? (h >= a && h < b) : (h >= a || h < b)
+}
+
+private func applyProfilePatch(_ p: inout UserProfile, _ patch: ProfilePatch) {
+    if let v = patch.weightKg { p.weightKg = v }
+    if let v = patch.sex { p.sex = v }
+    if let v = patch.awakeHours { p.awakeHours = v }
+    if let v = patch.sleepStartHour { p.sleepStartHour = v }
+    if let v = patch.sleepEndHour { p.sleepEndHour = v }
+    if let v = patch.altitudeM { p.altitudeM = v }
+    if patch.hasAmbientTempC { p.ambientTempC = patch.ambientTempC }
+    if patch.hasRelativeHumidityPct { p.relativeHumidityPct = patch.relativeHumidityPct }
+    if patch.hasDailyGoalOverrideMl { p.dailyGoalOverrideMl = patch.dailyGoalOverrideMl }
+    if patch.hasInitialLevelPct { p.initialLevelPct = patch.initialLevelPct }
 }
 
 private func effectiveProfile(_ events: [HydrationEvent], _ at: TimeInterval, _ base: UserProfile) -> UserProfile {
@@ -289,21 +283,127 @@ private func effectiveProfile(_ events: [HydrationEvent], _ at: TimeInterval, _ 
     for e in events {
         if e.at > at { break }
         if e.type == .profile, let patch = e.patch {
-            // Mirror the TS `{ ...p, ...e.patch }` spread: override only the
-            // fields the patch actually carries, leaving the rest untouched.
-            if let v = patch.weightKg { p.weightKg = v }
-            if let v = patch.sex { p.sex = v }
-            if let v = patch.awakeHours { p.awakeHours = v }
-            if let v = patch.sleepStartHour { p.sleepStartHour = v }
-            if let v = patch.sleepEndHour { p.sleepEndHour = v }
-            if let v = patch.altitudeM { p.altitudeM = v }
-            if patch.hasAmbientTempC { p.ambientTempC = patch.ambientTempC }
-            if patch.hasRelativeHumidityPct { p.relativeHumidityPct = patch.relativeHumidityPct }
-            if patch.hasDailyGoalOverrideMl { p.dailyGoalOverrideMl = patch.dailyGoalOverrideMl }
-            if patch.hasInitialLevelPct { p.initialLevelPct = patch.initialLevelPct }
+            applyProfilePatch(&p, patch)
         }
     }
     return p
+}
+
+// ————————— Derived event data (mirrors TS) —————————
+//
+// Built once per event list: sorted copy, extracted profile/alcohol/sport lists,
+// O(n) absorption credits. Integrator + forecast reuse these instead of
+// re-scanning the full history every minute.
+
+private struct AlcoholPeak {
+    let at: TimeInterval
+    let peak: Double
+}
+
+private struct SportWindow {
+    let at: TimeInterval
+    let endAt: TimeInterval
+    let intensity: SportIntensity
+}
+
+private struct ProfileEvt {
+    let at: TimeInterval
+    let patch: ProfilePatch
+}
+
+private final class Derived {
+    let sorted: [HydrationEvent]
+    let profileEvts: [ProfileEvt]
+    let alcohol: [AlcoholPeak]
+    let sport: [SportWindow]
+    let credited: [Double]
+    var memo: [TimeInterval: HydrationState] = [:]
+    var memoProfile: UserProfile?
+
+    init(
+        sorted: [HydrationEvent],
+        profileEvts: [ProfileEvt],
+        alcohol: [AlcoholPeak],
+        sport: [SportWindow],
+        credited: [Double]
+    ) {
+        self.sorted = sorted
+        self.profileEvts = profileEvts
+        self.alcohol = alcohol
+        self.sport = sport
+        self.credited = credited
+    }
+}
+
+private let MEMO_MAX = 512
+
+private func derive(_ events: [HydrationEvent]) -> Derived {
+    let sorted = events.sorted { $0.at < $1.at }
+    var profileEvts: [ProfileEvt] = []
+    var alcohol: [AlcoholPeak] = []
+    var sport: [SportWindow] = []
+    for e in sorted {
+        switch e.type {
+        case .profile:
+            if let patch = e.patch {
+                profileEvts.append(ProfileEvt(at: e.at, patch: patch))
+            }
+        case .alcohol:
+            let vol = e.volumeMl ?? 0
+            let abv = e.abv ?? 0
+            alcohol.append(AlcoholPeak(
+                at: e.at,
+                peak: peakPoisonExtra(ethanolGrams(volumeMl: vol, abv: abv), abv)
+            ))
+        case .sport:
+            if let dur = e.durationMin, let intensity = e.intensity {
+                sport.append(SportWindow(
+                    at: e.at,
+                    endAt: e.at + dur * 60_000,
+                    intensity: intensity
+                ))
+            }
+        default:
+            break
+        }
+    }
+    return Derived(
+        sorted: sorted,
+        profileEvts: profileEvts,
+        alcohol: alcohol,
+        sport: sport,
+        credited: creditedWaterMl(sorted)
+    )
+}
+
+private func poisonMultFrom(_ alcohol: [AlcoholPeak], _ t: TimeInterval) -> Double {
+    var extra: Double = 0
+    for a in alcohol {
+        if a.at > t { break }
+        let dt = t - a.at
+        if dt > POISON_WINDOW_MS { continue }
+        let rise = dt / POISON_PEAK_MS
+        let fall = (POISON_WINDOW_MS - dt) / POISON_PEAK_MS
+        extra += a.peak * min(rise, fall)
+    }
+    return min(3.0, 1.0 + extra)
+}
+
+private func sportLossFrom(
+    _ sport: [SportWindow],
+    _ t0: TimeInterval,
+    _ t1: TimeInterval,
+    _ p: UserProfile
+) -> Double {
+    var loss: Double = 0
+    for e in sport {
+        if e.at >= t1 { break }
+        let s = max(e.at, t0)
+        let en = min(e.endAt, t1)
+        if en <= s { continue }
+        loss += sweatRateMlPerHour(p, intensity: e.intensity) * (en - s) / 3_600_000
+    }
+    return loss
 }
 
 private func drainMlPerMs(_ p: UserProfile, poisonMult: Double, sleeping: Bool) -> Double {
@@ -315,31 +415,34 @@ private func drainMlPerMs(_ p: UserProfile, poisonMult: Double, sleeping: Bool) 
     return (baseDrainMlPerHour(p) * mult) / 3_600_000
 }
 
-private func sportLossMlOver(_ events: [HydrationEvent], _ t0: TimeInterval, _ t1: TimeInterval, _ p: UserProfile) -> Double {
-    var loss: Double = 0
-    for e in events where e.type == .sport {
-        guard let dur = e.durationMin, let intensity = e.intensity else { continue }
-        let endAt = e.at + dur * 60_000
-        let s = max(e.at, t0)
-        let en = min(endAt, t1)
-        if en <= s { continue }
-        let rate = sweatRateMlPerHour(p, intensity: intensity)
-        loss += rate * (en - s) / 3_600_000
-    }
-    return loss
-}
-
-private func integrateLoss(_ events: [HydrationEvent], _ from: TimeInterval, _ to: TimeInterval, _ base: UserProfile) -> Double {
+/// Integrate loss using pre-extracted lists + a profile cursor (no full rescans).
+private func integrateLoss(
+    _ d: Derived,
+    _ from: TimeInterval,
+    _ to: TimeInterval,
+    _ baseProfile: UserProfile
+) -> Double {
     if to <= from { return 0 }
     var acc: Double = 0
     var t = from
+    var pi = 0
+    var p = baseProfile
+    let applyProfilesUpTo: (TimeInterval) -> Void = { at in
+        while pi < d.profileEvts.count && d.profileEvts[pi].at <= at {
+            applyProfilePatch(&p, d.profileEvts[pi].patch)
+            pi += 1
+        }
+    }
+    applyProfilesUpTo(from)
     while t < to {
         let next = min(t + STEP_MS, to)
         let mid = (t + next) / 2
-        let p = effectiveProfile(events, mid, base)
-        let poison = poisonMultiplierAt(events, mid)
+        applyProfilesUpTo(mid)
+        let poison = poisonMultFrom(d.alcohol, mid)
         acc += drainMlPerMs(p, poisonMult: poison, sleeping: isSleeping(at: mid, p)) * (next - t)
-        acc += sportLossMlOver(events, t, next, p)
+        if !d.sport.isEmpty {
+            acc += sportLossFrom(d.sport, t, next, p)
+        }
         t = next
     }
     return acc
@@ -392,33 +495,41 @@ private func fluidIntakeMl(_ e: HydrationEvent) -> Double {
     }
 }
 
-// Rolling hourly absorption cap — parallel array of credited mL per event
-// (water, electrolytes, AND alcohol's water).
+// Sliding-window O(n) absorption credits (was O(n²)).
 func creditedWaterMl(_ sorted: [HydrationEvent]) -> [Double] {
     var credited = [Double](repeating: 0, count: sorted.count)
-    var hist: [(at: TimeInterval, credited: Double)] = []
+    var win: [(at: TimeInterval, credited: Double)] = []
+    var used: Double = 0
+    var head = 0
     for i in 0..<sorted.count {
         let e = sorted[i]
         let intake = fluidIntakeMl(e)
         if intake <= 0 { continue }
-        var used: Double = 0
-        for h in hist where h.at > e.at - ABSORB_WINDOW_MS && h.at <= e.at {
-            used += h.credited
+        while head < win.count && win[head].at <= e.at - ABSORB_WINDOW_MS {
+            used -= win[head].credited
+            head += 1
         }
         let remaining = max(0, MAX_WATER_ABSORB_ML_PER_H - used)
         let cred = min(intake, remaining)
         credited[i] = cred
-        hist.append((e.at, cred))
+        if cred > 0 {
+            win.append((e.at, cred))
+            used += cred
+        }
     }
     return credited
 }
 
 func waterAbsorbedInWindow(_ sorted: [HydrationEvent], _ at: TimeInterval) -> Double {
-    let credited = creditedWaterMl(sorted)
+    absorbedInWindowFrom(derive(sorted), at)
+}
+
+private func absorbedInWindowFrom(_ d: Derived, _ at: TimeInterval) -> Double {
     var used: Double = 0
-    for i in 0..<sorted.count {
-        let e = sorted[i]
-        if e.at > at - ABSORB_WINDOW_MS && e.at <= at { used += credited[i] }
+    for i in 0..<d.sorted.count {
+        let e = d.sorted[i]
+        if e.at > at { break }
+        if e.at > at - ABSORB_WINDOW_MS { used += d.credited[i] }
     }
     return used
 }
@@ -430,7 +541,6 @@ private func applyEventImpact(_ e: HydrationEvent, _ levelMl: Double, _ cap: Dou
     case .electrolytes:
         return clamp(levelMl + creditedMl * 1.1, 0, cap)
     case .alcohol:
-        // Absorbed water (capped) minus full diuresis; saturated → net can go negative.
         return clamp(levelMl + creditedMl - alcoholDiuresisMl(volumeMl: e.volumeMl ?? 0, abv: e.abv ?? 0), 0, cap)
     case .caffeine:
         return clamp(levelMl + caffeineNetMl(e), 0, cap)
@@ -439,57 +549,167 @@ private func applyEventImpact(_ e: HydrationEvent, _ levelMl: Double, _ cap: Dou
     }
 }
 
+private func memoize(_ d: Derived, _ at: TimeInterval, _ s: HydrationState) -> HydrationState {
+    if d.memo.count >= MEMO_MAX { d.memo.removeAll(keepingCapacity: true) }
+    d.memo[at] = s
+    return s
+}
+
+private func finalizeState(
+    _ d: Derived,
+    at: TimeInterval,
+    levelMl rawLevel: Double,
+    baseProfile: UserProfile,
+    ambleAt: TimeInterval? = nil,
+    redAt: TimeInterval? = nil,
+    computeForecast: Bool = true
+) -> HydrationState {
+    let profileNow = effectiveProfile(d.sorted, at, baseProfile)
+    let capNow = dailyNeedMl(profileNow)
+    let levelMl = clamp(rawLevel, 0, capNow)
+    let poisonMult = poisonMultFrom(d.alcohol, at)
+    let poisoned = poisonMult > 1.0
+    let poisonUntil = poisoned ? poisonEndsAt(d.sorted, at) : nil
+    let levelPct = (levelMl / capNow) * 100
+    let zone = zoneOf(pct: levelPct, poisoned: poisoned)
+    let crossings: (TimeInterval?, TimeInterval?)
+    if computeForecast {
+        crossings = forecastFrom(d, at: at, startLevelMl: levelMl, baseProfile: baseProfile)
+    } else {
+        crossings = (ambleAt, redAt)
+    }
+    let absorbed = absorbedInWindowFrom(d, at)
+    return HydrationState(
+        levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
+        zone: zone, poisoned: poisoned, poisonUntil: poisonUntil,
+        poisonMult: poisonMult, ambleAt: crossings.0, redAt: crossings.1,
+        absorbedLastHourMl: absorbed, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
+        saturated: absorbed >= MAX_WATER_ABSORB_ML_PER_H * 0.98
+    )
+}
+
+/// Replay all events up to (and including) those with `e.at <= cursorEnd`,
+/// returning level just after the last applied event (or anchor if none).
+private func levelAfterEvents(_ d: Derived, baseProfile: UserProfile) -> (levelMl: Double, cursor: TimeInterval)? {
+    let sorted = d.sorted
+    guard let first = sorted.first else { return nil }
+    let startProfile = effectiveProfile(sorted, first.at, baseProfile)
+    var levelMl = anchorLevelMl(startProfile)
+    var cursor = first.at
+    for i in 0..<sorted.count {
+        let e = sorted[i]
+        levelMl -= integrateLoss(d, cursor, e.at, baseProfile)
+        let p = effectiveProfile(sorted, e.at, baseProfile)
+        levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), d.credited[i])
+        cursor = e.at
+    }
+    return (levelMl, cursor)
+}
+
 func computeState(
     events rawEvents: [HydrationEvent],
     at: TimeInterval,
     profile baseProfile: UserProfile = .default
 ) -> HydrationState {
-    let sorted = rawEvents.sorted { $0.at < $1.at }
-    let profileNow = effectiveProfile(sorted, at, baseProfile)
+    let d = derive(rawEvents)
+    if d.memoProfile.map({ $0.weightKg != baseProfile.weightKg
+        || $0.sex != baseProfile.sex
+        || $0.awakeHours != baseProfile.awakeHours
+        || $0.sleepStartHour != baseProfile.sleepStartHour
+        || $0.sleepEndHour != baseProfile.sleepEndHour
+        || $0.altitudeM != baseProfile.altitudeM
+        || $0.ambientTempC != baseProfile.ambientTempC
+        || $0.relativeHumidityPct != baseProfile.relativeHumidityPct
+        || $0.dailyGoalOverrideMl != baseProfile.dailyGoalOverrideMl
+        || $0.initialLevelPct != baseProfile.initialLevelPct }) ?? false {
+        d.memo.removeAll(keepingCapacity: true)
+    }
+    d.memoProfile = baseProfile
+    if let cached = d.memo[at] { return cached }
+
+    let profileNow = effectiveProfile(d.sorted, at, baseProfile)
     let capNow = dailyNeedMl(profileNow)
 
-    if sorted.isEmpty {
-        // Use the declared % directly (avoids float noise around the 55 % amber edge).
+    if d.sorted.isEmpty {
         let levelPct = resolveInitialLevelPct(profileNow)
         let levelMl = clamp((capNow * levelPct) / 100, 0, capNow)
-        return HydrationState(
+        return memoize(d, at, HydrationState(
             levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
             zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
             poisonMult: 1, ambleAt: nil, redAt: nil,
             absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
-        )
+        ))
     }
 
-    let credited = creditedWaterMl(sorted)
-    let startProfile = effectiveProfile(sorted, sorted.first!.at, baseProfile)
-    var levelMl = anchorLevelMl(startProfile)
-    var cursor = sorted.first!.at
-
-    for i in 0..<sorted.count {
-        let e = sorted[i]
-        levelMl -= integrateLoss(sorted, cursor, e.at, baseProfile)
-        let p = effectiveProfile(sorted, e.at, baseProfile)
-        levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), credited[i])
-        cursor = e.at
+    guard let replayed = levelAfterEvents(d, baseProfile: baseProfile) else {
+        return computeState(events: [], at: at, profile: baseProfile)
     }
-    levelMl -= integrateLoss(sorted, cursor, at, baseProfile)
-    levelMl = clamp(levelMl, 0, capNow)
+    var levelMl = replayed.levelMl
+    levelMl -= integrateLoss(d, replayed.cursor, at, baseProfile)
+    return memoize(d, at, finalizeState(d, at: at, levelMl: levelMl, baseProfile: baseProfile))
+}
 
-    let poisonMult = poisonMultiplierAt(sorted, at)
-    let poisoned = poisonMult > 1.0
-    let poisonUntil = poisoned ? poisonEndsAt(sorted, at) : nil
-    let levelPct = (levelMl / capNow) * 100
-    let zone = zoneOf(pct: levelPct, poisoned: poisoned)
-    let (ambleAt, redAt) = forecast(events: sorted, at: at, startLevelMl: levelMl, baseProfile: baseProfile)
-    let absorbed = waterAbsorbedInWindow(sorted, at)
+/// Compute many timestamps cheaply: replay events once, then carry the level
+/// forward with only the loss integrator between successive `ats`.
+/// `ats` must be sorted ascending. Used by the widget timeline (~120 entries).
+func computeStates(
+    events rawEvents: [HydrationEvent],
+    ats: [TimeInterval],
+    profile baseProfile: UserProfile = .default
+) -> [HydrationState] {
+    guard !ats.isEmpty else { return [] }
+    let d = derive(rawEvents)
 
-    return HydrationState(
-        levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
-        zone: zone, poisoned: poisoned, poisonUntil: poisonUntil,
-        poisonMult: poisonMult, ambleAt: ambleAt, redAt: redAt,
-        absorbedLastHourMl: absorbed, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
-        saturated: absorbed >= MAX_WATER_ABSORB_ML_PER_H * 0.98
-    )
+    if d.sorted.isEmpty {
+        return ats.map { at in
+            let profileNow = effectiveProfile(d.sorted, at, baseProfile)
+            let capNow = dailyNeedMl(profileNow)
+            let levelPct = resolveInitialLevelPct(profileNow)
+            let levelMl = clamp((capNow * levelPct) / 100, 0, capNow)
+            return HydrationState(
+                levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
+                zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
+                poisonMult: 1, ambleAt: nil, redAt: nil,
+                absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
+            )
+        }
+    }
+
+    guard let replayed = levelAfterEvents(d, baseProfile: baseProfile) else {
+        return ats.map { computeState(events: rawEvents, at: $0, profile: baseProfile) }
+    }
+    var levelMl = replayed.levelMl
+    var t = replayed.cursor
+
+    var out: [HydrationState] = []
+    out.reserveCapacity(ats.count)
+    var sharedAmble: TimeInterval? = nil
+    var sharedRed: TimeInterval? = nil
+    var first = true
+    for at in ats {
+        if at >= t {
+            levelMl -= integrateLoss(d, t, at, baseProfile)
+            t = at
+        } else {
+            out.append(computeState(events: rawEvents, at: at, profile: baseProfile))
+            continue
+        }
+        let state: HydrationState
+        if first {
+            state = finalizeState(d, at: at, levelMl: levelMl, baseProfile: baseProfile)
+            sharedAmble = state.ambleAt
+            sharedRed = state.redAt
+            first = false
+        } else {
+            // Crossing times are absolute; reuse them across the future timeline.
+            state = finalizeState(
+                d, at: at, levelMl: levelMl, baseProfile: baseProfile,
+                ambleAt: sharedAmble, redAt: sharedRed, computeForecast: false
+            )
+        }
+        out.append(state)
+    }
+    return out
 }
 
 func forecast(
@@ -499,27 +719,47 @@ func forecast(
     baseProfile: UserProfile,
     horizonMs: TimeInterval = 6 * 3_600_000
 ) -> (TimeInterval?, TimeInterval?) {
-    let profileNow = effectiveProfile(events, at, baseProfile)
+    return forecastFrom(derive(events), at: at, startLevelMl: startLevelMl, baseProfile: baseProfile, horizonMs: horizonMs)
+}
+
+private func forecastFrom(
+    _ d: Derived,
+    at fromAt: TimeInterval,
+    startLevelMl: Double,
+    baseProfile: UserProfile,
+    horizonMs: TimeInterval = 6 * 3_600_000
+) -> (TimeInterval?, TimeInterval?) {
+    let profileNow = effectiveProfile(d.sorted, fromAt, baseProfile)
     let cap = dailyNeedMl(profileNow)
     let amberT = cap * 0.55
     let redT = cap * 0.25
-    var ambleAt: TimeInterval? = startLevelMl <= amberT ? at : nil
-    var redAt: TimeInterval? = startLevelMl < redT ? at : nil
+    var ambleAt: TimeInterval? = startLevelMl <= amberT ? fromAt : nil
+    var redAt: TimeInterval? = startLevelMl < redT ? fromAt : nil
     if ambleAt != nil && redAt != nil { return (ambleAt, redAt) }
+
     var level = startLevelMl
-    var t = at
-    let end = at + horizonMs
+    var t = fromAt
+    let end = fromAt + horizonMs
+    var pi = 0
+    var p = baseProfile
+    let applyProfilesUpTo: (TimeInterval) -> Void = { upTo in
+        while pi < d.profileEvts.count && d.profileEvts[pi].at <= upTo {
+            applyProfilePatch(&p, d.profileEvts[pi].patch)
+            pi += 1
+        }
+    }
+    applyProfilesUpTo(fromAt)
+
     while t < end {
         let next = min(t + STEP_MS, end)
         let dt = next - t
         let mid = (t + next) / 2
-        let p = effectiveProfile(events, mid, baseProfile)
-        let poison = poisonMultiplierAt(events, mid)
+        applyProfilesUpTo(mid)
+        let poison = poisonMultFrom(d.alcohol, mid)
         let before = level
         let loss = drainMlPerMs(p, poisonMult: poison, sleeping: isSleeping(at: mid, p)) * dt
-                 + sportLossMlOver(events, t, next, p)
+            + (d.sport.isEmpty ? 0 : sportLossFrom(d.sport, t, next, p))
         let after = before - loss
-        // Interpolate the crossing within the step for a second-precise result.
         if ambleAt == nil && after <= amberT {
             let frac = loss > 0 ? (before - amberT) / loss : 0
             ambleAt = t + frac * dt

@@ -41,16 +41,30 @@ struct HydraProvider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<HydraEntry>) -> Void) {
         let now = Date()
-        var entries: [HydraEntry] = []
         // Dense entries so the home-screen % tracks the live app drain.
         // ~1.5 %/15 min of passive drain made a 15-min step look "off by 1 %".
         // 2-min steps for 4 h ≈ 120 entries (well within WidgetKit budgets).
+        var dates: [Date] = []
         var i = 0.0
         let horizon: TimeInterval = 4 * 3600
         let step: TimeInterval = 2 * 60
         while i <= horizon {
-            entries.append(entry(at: now.addingTimeInterval(i)))
+            dates.append(now.addingTimeInterval(i))
             i += step
+        }
+        let entries: [HydraEntry]
+        if let snap = loadSharedSnapshot() {
+            let ats = dates.map { $0.timeIntervalSince1970 * 1000 }
+            // One event replay + carry-forward between timestamps (not 120× full history).
+            let states = computeStates(events: snap.events, ats: ats, profile: snap.profile)
+            entries = zip(dates, states).map { HydraEntry(date: $0, state: $1) }
+        } else {
+            entries = dates.map { date in
+                HydraEntry(date: date, state: HydrationState(
+                    levelMl: 2240, dailyNeedMl: 2240, levelPct: 100, zone: .green,
+                    poisoned: false, poisonUntil: nil, poisonMult: 1, ambleAt: nil, redAt: nil,
+                    absorbedLastHourMl: 0, absorbCapMl: 1000, saturated: false))
+            }
         }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
     }
