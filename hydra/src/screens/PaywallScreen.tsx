@@ -32,7 +32,7 @@ interface Props {
 }
 
 export function PaywallScreen({ onRequestSignIn }: Props = {}) {
-  const { packages, offering, purchase, restore, loadOfferings } =
+  const { packages, purchase, restore, loadOfferings } =
     useSubscription();
   const { signOut, status: authStatus } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -115,9 +115,6 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
         ) : null}
 
         <Text style={styles.legal}>
-          {offering?.serverDescription
-            ? `${offering.serverDescription}\n`
-            : ''}
           L'essai gratuit dure 7 jours. Sans annulation au moins 24 h avant la
           fin, l'abonnement se renouvelle automatiquement à {priceLabel}/mois.
           Gère ou annule l'abonnement dans les réglages de ton compte Apple.

@@ -18,7 +18,18 @@ export interface UserProfile {
   relativeHumidityPct: number | null; // null = temperate reference (no penalty)
   altitudeM: number;
   dailyGoalOverrideMl: number | null; // let user pin a goal manually
+  // First-run calibration from onboarding ("Comment tu te sens ?").
+  // null = legacy / unknown → treat as 100 % (old behaviour).
+  initialLevelPct: number | null;
 }
+
+/** Onboarding feeling → starting bar %. */
+export const FEELING_LEVEL_PCT = {
+  good: 55,
+  ok: 35,
+  dry: 20,
+} as const;
+export type FeelingKey = keyof typeof FEELING_LEVEL_PCT;
 
 export const DEFAULT_PROFILE: UserProfile = {
   weightKg: 70,
@@ -30,7 +41,15 @@ export const DEFAULT_PROFILE: UserProfile = {
   relativeHumidityPct: null,
   altitudeM: 0,
   dailyGoalOverrideMl: null,
+  initialLevelPct: null,
 };
+
+/** Resolved 0–100 starting fill. null / missing → 100 (backward compatible). */
+export function resolveInitialLevelPct(p: UserProfile): number {
+  const v = p.initialLevelPct;
+  if (v == null || !Number.isFinite(v)) return 100;
+  return Math.max(0, Math.min(100, v));
+}
 
 // One shape per event kind — no discriminant string in field names to keep
 // the JSON compact for the App Group snapshot the widget reads.
@@ -78,6 +97,10 @@ export const ABSORB_WINDOW_MS = 3_600_000;
 
 export function dailyNeedMl(p: UserProfile): number {
   return p.dailyGoalOverrideMl ?? p.weightKg * ML_PER_KG_DAY;
+}
+
+export function anchorLevelMl(p: UserProfile): number {
+  return dailyNeedMl(p) * (resolveInitialLevelPct(p) / 100);
 }
 
 export function baseDrainMlPerHour(p: UserProfile): number {
@@ -457,6 +480,12 @@ export function zoneOf(pct: number, poisoned: boolean): Zone {
   return 'red';
 }
 
+/** Integer % for UI (app + widgets). Always round-half-up so both surfaces match. */
+export function displayLevelPct(levelPct: number): number {
+  if (!Number.isFinite(levelPct)) return 0;
+  return Math.max(0, Math.min(100, Math.round(levelPct)));
+}
+
 // ————————— Instantaneous drink impact (mL) —————————
 
 // Alcohol diuresis (excretion). Gated by concentration (see concentrationFactor):
@@ -597,11 +626,14 @@ export function computeState(
   const capNow = dailyNeedMl(profileAtNow);
 
   if (sorted.length === 0) {
+    // Use the declared % directly (avoids float noise around the 55 % amber edge).
+    const levelPct = resolveInitialLevelPct(profileAtNow);
+    const levelMl = clamp((capNow * levelPct) / 100, 0, capNow);
     return memoize(d, at, {
-      levelMl: capNow,
+      levelMl,
       dailyNeedMl: capNow,
-      levelPct: 100,
-      zone: 'green',
+      levelPct,
+      zone: zoneOf(levelPct, false),
       poisoned: false,
       poisonUntil: null,
       poisonMult: 1,
@@ -616,9 +648,9 @@ export function computeState(
   // Per-event credited water (rolling hourly absorption cap) — from cache.
   const credited = d.credited;
 
-  // Anchor: level starts at capacity at the first event's timestamp.
+  // Anchor: onboarding calibration (or 100 % legacy) at the first event's timestamp.
   const startProfile = effectiveProfile(sorted, sorted[0].at, baseProfile);
-  let levelMl = dailyNeedMl(startProfile);
+  let levelMl = anchorLevelMl(startProfile);
   let cursor = sorted[0].at;
 
   for (let i = 0; i < sorted.length; i++) {

@@ -42,9 +42,17 @@ struct HydraProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<HydraEntry>) -> Void) {
         let now = Date()
         var entries: [HydraEntry] = []
+        // Dense entries so the home-screen % tracks the live app drain.
+        // ~1.5 %/15 min of passive drain made a 15-min step look "off by 1 %".
+        // 2-min steps for 4 h ≈ 120 entries (well within WidgetKit budgets).
         var i = 0.0
-        while i <= 6 * 3600 { entries.append(entry(at: now.addingTimeInterval(i))); i += 15 * 60 }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(6 * 3600))))
+        let horizon: TimeInterval = 4 * 3600
+        let step: TimeInterval = 2 * 60
+        while i <= horizon {
+            entries.append(entry(at: now.addingTimeInterval(i)))
+            i += step
+        }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
     }
     private func entry(at date: Date) -> HydraEntry {
         let ms = date.timeIntervalSince1970 * 1000
@@ -82,7 +90,7 @@ struct HydraSegBar: View {
     var height: CGFloat = 11
     var count: Int = 14
     var body: some View {
-        let filled = Int((pct / 100.0) * Double(count))
+        let filled = Int(((pct / 100.0) * Double(count)).rounded())
         HStack(spacing: 2.5) {
             ForEach(0..<count, id: \.self) { i in
                 RoundedRectangle(cornerRadius: 2.5)
@@ -126,7 +134,7 @@ struct HydraRectangularView: View {
             HStack {
                 Text("HYDRA").font(.system(size: 10, weight: .bold, design: .monospaced))
                 Spacer()
-                Text("\(Int(state.levelPct))%").font(.system(size: 12, weight: .bold, design: .monospaced))
+                Text("\(displayLevelPct(state.levelPct))%").font(.system(size: 12, weight: .bold, design: .monospaced))
             }
             HydraSegBar(pct: state.levelPct, color: .hGreen, mono: true, height: 10)
             HStack {
@@ -152,7 +160,7 @@ struct HydraSmallView: View {
                 Spacer()
                 Text("💧").font(.system(size: 12))
             }
-            Text("\(Int(state.levelPct))%")
+            Text("\(displayLevelPct(state.levelPct))%")
                 .font(.system(size: 38, weight: .black)).foregroundColor(c)
                 .minimumScaleFactor(0.6).lineLimit(1)
             HydraSegBar(pct: state.levelPct, color: c, height: 10)
@@ -182,7 +190,7 @@ struct HydraMediumView: View {
                 // left: stats
                 VStack(alignment: .leading, spacing: 1) {
                     Text("HYDRA").font(.system(size: 9, weight: .black)).kerning(1.5).foregroundColor(.hDim)
-                    Text("\(Int(state.levelPct))%").font(.system(size: 30, weight: .black)).foregroundColor(c)
+                    Text("\(displayLevelPct(state.levelPct))%").font(.system(size: 30, weight: .black)).foregroundColor(c)
                         .minimumScaleFactor(0.6).lineLimit(1)
                     Text(statusText(state)).font(.system(size: 9, weight: .black)).kerning(0.4).foregroundColor(c)
                         .lineLimit(1).minimumScaleFactor(0.7)

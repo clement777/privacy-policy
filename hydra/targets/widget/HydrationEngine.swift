@@ -22,6 +22,8 @@ struct UserProfile: Codable {
     var relativeHumidityPct: Double?
     var altitudeM: Double
     var dailyGoalOverrideMl: Double?
+    /// First-run calibration from onboarding. nil = legacy → 100 %.
+    var initialLevelPct: Double?
 
     static let `default` = UserProfile(
         weightKg: 70,
@@ -32,7 +34,8 @@ struct UserProfile: Codable {
         ambientTempC: nil,
         relativeHumidityPct: nil,
         altitudeM: 0,
-        dailyGoalOverrideMl: nil
+        dailyGoalOverrideMl: nil,
+        initialLevelPct: nil
     )
 }
 
@@ -54,10 +57,11 @@ struct ProfilePatch: Codable {
     var hasAmbientTempC = false;        var ambientTempC: Double?
     var hasRelativeHumidityPct = false; var relativeHumidityPct: Double?
     var hasDailyGoalOverrideMl = false; var dailyGoalOverrideMl: Double?
+    var hasInitialLevelPct = false;     var initialLevelPct: Double?
 
     enum CodingKeys: String, CodingKey {
         case weightKg, sex, awakeHours, sleepStartHour, sleepEndHour, altitudeM
-        case ambientTempC, relativeHumidityPct, dailyGoalOverrideMl
+        case ambientTempC, relativeHumidityPct, dailyGoalOverrideMl, initialLevelPct
     }
 
     init(from decoder: Decoder) throws {
@@ -80,6 +84,10 @@ struct ProfilePatch: Codable {
             hasDailyGoalOverrideMl = true
             dailyGoalOverrideMl = try c.decodeIfPresent(Double.self, forKey: .dailyGoalOverrideMl)
         }
+        if c.contains(.initialLevelPct) {
+            hasInitialLevelPct = true
+            initialLevelPct = try c.decodeIfPresent(Double.self, forKey: .initialLevelPct)
+        }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -95,6 +103,7 @@ struct ProfilePatch: Codable {
         if hasAmbientTempC { try c.encode(ambientTempC, forKey: .ambientTempC) }
         if hasRelativeHumidityPct { try c.encode(relativeHumidityPct, forKey: .relativeHumidityPct) }
         if hasDailyGoalOverrideMl { try c.encode(dailyGoalOverrideMl, forKey: .dailyGoalOverrideMl) }
+        if hasInitialLevelPct { try c.encode(initialLevelPct, forKey: .initialLevelPct) }
     }
 }
 
@@ -140,6 +149,15 @@ let ABSORB_WINDOW_MS: Double = 3_600_000
 func dailyNeedMl(_ p: UserProfile) -> Double {
     if let g = p.dailyGoalOverrideMl { return g }
     return p.weightKg * ML_PER_KG_DAY
+}
+
+func resolveInitialLevelPct(_ p: UserProfile) -> Double {
+    guard let v = p.initialLevelPct, v.isFinite else { return 100 }
+    return max(0, min(100, v))
+}
+
+func anchorLevelMl(_ p: UserProfile) -> Double {
+    return dailyNeedMl(p) * (resolveInitialLevelPct(p) / 100)
 }
 
 func baseDrainMlPerHour(_ p: UserProfile) -> Double {
@@ -282,6 +300,7 @@ private func effectiveProfile(_ events: [HydrationEvent], _ at: TimeInterval, _ 
             if patch.hasAmbientTempC { p.ambientTempC = patch.ambientTempC }
             if patch.hasRelativeHumidityPct { p.relativeHumidityPct = patch.relativeHumidityPct }
             if patch.hasDailyGoalOverrideMl { p.dailyGoalOverrideMl = patch.dailyGoalOverrideMl }
+            if patch.hasInitialLevelPct { p.initialLevelPct = patch.initialLevelPct }
         }
     }
     return p
@@ -331,6 +350,12 @@ func zoneOf(pct: Double, poisoned: Bool) -> Zone {
     if pct > 55 { return .green }
     if pct >= 25 { return .amber }
     return .red
+}
+
+/// Integer % for UI — round half-up so the widget matches the app (`Math.round`).
+func displayLevelPct(_ levelPct: Double) -> Int {
+    guard levelPct.isFinite else { return 0 }
+    return max(0, min(100, Int(levelPct.rounded())))
 }
 
 // Alcohol diuresis (excretion) — always applies in full, not absorption-capped.
@@ -424,9 +449,12 @@ func computeState(
     let capNow = dailyNeedMl(profileNow)
 
     if sorted.isEmpty {
+        // Use the declared % directly (avoids float noise around the 55 % amber edge).
+        let levelPct = resolveInitialLevelPct(profileNow)
+        let levelMl = clamp((capNow * levelPct) / 100, 0, capNow)
         return HydrationState(
-            levelMl: capNow, dailyNeedMl: capNow, levelPct: 100,
-            zone: .green, poisoned: false, poisonUntil: nil,
+            levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
+            zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
             poisonMult: 1, ambleAt: nil, redAt: nil,
             absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
         )
@@ -434,7 +462,7 @@ func computeState(
 
     let credited = creditedWaterMl(sorted)
     let startProfile = effectiveProfile(sorted, sorted.first!.at, baseProfile)
-    var levelMl = dailyNeedMl(startProfile)
+    var levelMl = anchorLevelMl(startProfile)
     var cursor = sorted.first!.at
 
     for i in 0..<sorted.count {

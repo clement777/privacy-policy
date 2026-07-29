@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   computeState,
   DEFAULT_PROFILE,
+  displayLevelPct,
   HydrationEvent,
   HydrationState,
   remainingAbsorptionMl,
@@ -155,7 +156,7 @@ export function buildWidgetModel(
   now: number = Date.now()
 ): WidgetModel {
   const state = computeState(slice.events, now, slice.profile);
-  const pct = Math.max(0, Math.round(state.levelPct));
+  const pct = displayLevelPct(state.levelPct);
   return {
     pct,
     zoneColor: ZONE_COLORS[state.zone],
@@ -164,7 +165,7 @@ export function buildWidgetModel(
     dailyNeedMl: Math.round(state.dailyNeedMl),
     filledSegments: Math.max(
       0,
-      Math.min(WIDGET_SEGMENTS, Math.round((state.levelPct / 100) * WIDGET_SEGMENTS))
+      Math.min(WIDGET_SEGMENTS, Math.round((pct / 100) * WIDGET_SEGMENTS))
     ),
     waterLabel: `＋ EAU · ${slice.widget.defaultWaterMl} mL`,
     showAlcohol: slice.widget.showAlcoholOnMedium,

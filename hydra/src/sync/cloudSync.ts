@@ -123,6 +123,8 @@ function rowToProfile(r: ProfileRow): UserProfile | null {
     relativeHumidityPct: r.relative_humidity_pct == null ? null : Number(r.relative_humidity_pct),
     altitudeM: Number(r.altitude_m ?? 0),
     dailyGoalOverrideMl: r.daily_goal_override_ml == null ? null : Number(r.daily_goal_override_ml),
+    // Not in the profiles table yet — kept via the onboarding profile event patch.
+    initialLevelPct: null,
   };
 }
 
@@ -209,14 +211,42 @@ async function pullRemote(userId: string): Promise<void> {
 let syncing = false;
 let pendingAgain = false;
 
+// Decide whether local data may be pushed for this user. Anonymous onboarding
+// (owner null + onboarded) is claimed and pushed; any other mismatch wipes
+// local first and pulls only — never contaminate B with A's bar.
+async function prepareSyncForUser(
+  userId: string
+): Promise<'push-then-pull' | 'pull-only'> {
+  const s = useHydration.getState();
+  const owner = s.dataOwnerUserId;
+
+  if (owner === userId) return 'push-then-pull';
+
+  // Just finished the questionnaire while signed out → this account inherits it.
+  if (owner == null && s.onboarded) {
+    s.claimDataOwner(userId);
+    return 'push-then-pull';
+  }
+
+  // Different account, or signing into an existing account on a clean device.
+  await s.resetLocalData();
+  useHydration.getState().claimDataOwner(userId);
+  return 'pull-only';
+}
+
 export async function syncNow(): Promise<void> {
   const { status, user } = useAuth.getState();
   if (status !== 'signedIn' || !user) return;
   if (syncing) { pendingAgain = true; return; }
   syncing = true;
   try {
-    await pushLocal(user.id);
-    await pullRemote(user.id);
+    const mode = await prepareSyncForUser(user.id);
+    if (mode === 'push-then-pull') {
+      await pushLocal(user.id);
+      await pullRemote(user.id);
+    } else {
+      await pullRemote(user.id);
+    }
   } catch {
     // Offline / transient — local store is intact; next trigger retries.
   } finally {

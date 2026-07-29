@@ -35,11 +35,21 @@ interface HydraState {
   widget: WidgetSettings;
   hydrated: boolean;
   onboarded: boolean;
+  // Local-only: "Refaire le questionnaire" from settings. Must NOT flip
+  // `onboarded` — a cloud pull would otherwise re-apply onboarded=false after
+  // Terminer and loop the user back to step 0.
+  reconfiguring: boolean;
+  // Which Supabase user the local hydration data belongs to. null = anonymous
+  // (onboarding funnel) or wiped after sign-out. Prevents pushing user A's
+  // local bar into user B's cloud row on account switch.
+  dataOwnerUserId: string | null;
   completeOnboarding: (
     profilePatch: Partial<UserProfile>,
     widgetPatch: Partial<WidgetSettings>
   ) => Promise<void>;
   restartOnboarding: () => void;
+  // Wipe local hydration + widget snapshot (call on sign-out / account switch).
+  resetLocalData: () => Promise<void>;
   logPreset: (key: string) => Promise<LogResult>;
   logWater: (volumeMl: number) => Promise<LogResult>;
   logCustomDrink: (kind: 'water' | 'electrolytes' | 'alcohol' | 'caffeine', args: { volumeMl: number; abv?: number; caffeineMg?: number }) => Promise<void>;
@@ -60,6 +70,7 @@ interface HydraState {
   cloudCursor: string | null; // max events.updated_at pulled so far (ISO)
   clearDeleted: (keys: string[]) => void;
   setCloudCursor: (cursor: string | null) => void;
+  claimDataOwner: (userId: string) => void;
   // Merge server changes into the local store (idempotent).
   mergeCloud: (args: {
     addEvents: HydrationEvent[];
@@ -90,6 +101,8 @@ export const useHydration = create<HydraState>()(
       widget: DEFAULT_WIDGET_SETTINGS,
       hydrated: false,
       onboarded: false,
+      reconfiguring: false,
+      dataOwnerUserId: null,
       deletedKeys: [],
       cloudCursor: null,
 
@@ -103,15 +116,36 @@ export const useHydration = create<HydraState>()(
           widget: { ...get().widget, ...widgetPatch },
           events: [...get().events, evt],
           onboarded: true,
+          reconfiguring: false,
         });
         await get()._sync();
       },
 
-      // Re-open the guided questionnaire. Only flips the flag locally; the next
-      // completeOnboarding() re-syncs. We don't push onboarded=false to the cloud
-      // here so a background pull can't kick the user out mid-questionnaire.
+      // Re-open the guided questionnaire from settings. Keep onboarded=true so
+      // cloud sync cannot yank the user back into a first-run loop after finish.
       restartOnboarding() {
-        set({ onboarded: false });
+        set({ reconfiguring: true });
+      },
+
+      // Full local wipe — used on sign-out and when switching to another account
+      // so Clem's bar never lands in the Apple-review cloud row.
+      async resetLocalData() {
+        set({
+          events: [],
+          profile: { ...DEFAULT_PROFILE },
+          presets: DEFAULT_PRESETS,
+          widget: { ...DEFAULT_WIDGET_SETTINGS },
+          onboarded: false,
+          reconfiguring: false,
+          dataOwnerUserId: null,
+          deletedKeys: [],
+          cloudCursor: null,
+        });
+        await get()._sync();
+      },
+
+      claimDataOwner(userId) {
+        set({ dataOwnerUserId: userId });
       },
 
       // Pull widget-logged events (iOS App Intents) out of the shared snapshot
@@ -287,11 +321,18 @@ export const useHydration = create<HydraState>()(
         }
         next.sort((a, b) => a.at - b.at);
 
+        // Never let a stale remote onboarded=false downgrade a finished local
+        // session (race after "Refaire le questionnaire" + Terminer).
+        const nextOnboarded =
+          onboarded === undefined
+            ? undefined
+            : onboarded || get().onboarded;
+
         set({
           events: next,
           ...(profile ? { profile } : {}),
           ...(widget ? { widget: { ...get().widget, ...widget } } : {}),
-          ...(onboarded !== undefined ? { onboarded } : {}),
+          ...(nextOnboarded !== undefined ? { onboarded: nextOnboarded } : {}),
         });
         await get()._sync();
       },
@@ -305,6 +346,7 @@ export const useHydration = create<HydraState>()(
         presets: s.presets,
         widget: s.widget,
         onboarded: s.onboarded,
+        dataOwnerUserId: s.dataOwnerUserId,
         deletedKeys: s.deletedKeys,
         cloudCursor: s.cloudCursor,
       }),

@@ -56,6 +56,8 @@ interface SubState {
   loadOfferings: () => Promise<void>;
   purchase: (pkg: PurchasesPackage) => Promise<PurchaseResult>;
   restore: () => Promise<PurchaseResult>;
+  // Back to an anonymous RevenueCat user (call on sign-out).
+  logOut: () => Promise<void>;
 }
 
 function isActive(info: CustomerInfo): boolean {
@@ -147,6 +149,16 @@ export const useSubscription = create<SubState>((set, get) => ({
     } catch (e: unknown) {
       const err = e as { message?: string };
       return { ok: false, message: err.message ?? 'Restauration impossible.' };
+    }
+  },
+
+  async logOut() {
+    if (!Purchases || !get().configured) return;
+    try {
+      const info = await Purchases.logOut();
+      set({ status: isActive(info) ? 'active' : 'inactive' });
+    } catch {
+      set({ status: 'inactive' });
     }
   },
 }));

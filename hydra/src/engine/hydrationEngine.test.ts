@@ -423,3 +423,37 @@ describe('weight scales daily need', () => {
     expect(baseDrainMlPerHour(P90)).toBeGreaterThan(baseDrainMlPerHour(P70));
   });
 });
+
+describe('initialLevelPct (onboarding calibration)', () => {
+  it('defaults to 100 % when unset (legacy)', () => {
+    const s = computeState([], ts(12), P70);
+    expect(s.levelPct).toBe(100);
+    expect(s.zone).toBe('green');
+  });
+
+  it('empty log respects onboarding feeling percentages', () => {
+    const at55 = computeState([], ts(12), { ...P70, initialLevelPct: 55 });
+    expect(Math.round(at55.levelPct)).toBe(55);
+    expect(at55.zone).toBe('amber');
+
+    const at35 = computeState([], ts(12), { ...P70, initialLevelPct: 35 });
+    expect(Math.round(at35.levelPct)).toBe(35);
+    expect(at35.zone).toBe('amber');
+
+    const at20 = computeState([], ts(12), { ...P70, initialLevelPct: 20 });
+    expect(Math.round(at20.levelPct)).toBe(20);
+    expect(at20.zone).toBe('red');
+  });
+
+  it('profile event patch sets the anchor for subsequent drinks', () => {
+    const events: HydrationEvent[] = [
+      {
+        type: 'profile',
+        at: ts(8),
+        patch: { initialLevelPct: 35 },
+      },
+    ];
+    const s = computeState(events, ts(8), P70);
+    expect(Math.round(s.levelPct)).toBe(35);
+  });
+});

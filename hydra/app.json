@@ -3,7 +3,7 @@
     "name": "HYDRA",
     "slug": "hydra",
     "scheme": "hydra",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -26,7 +26,8 @@
         "com.apple.security.application-groups": [
           "group.com.shipply.hydraapp"
         ]
-      }
+      },
+      "buildNumber": "4"
     },
     "plugins": [
       "expo-font",

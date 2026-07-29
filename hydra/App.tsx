@@ -55,6 +55,7 @@ export default function App() {
   });
 
   const onboarded = useHydration((s) => s.onboarded);
+  const reconfiguring = useHydration((s) => s.reconfiguring);
   const authStatus = useAuth((s) => s.status);
   const userId = useAuth((s) => s.user?.id ?? null);
   const subStatus = useSubscription((s) => s.status);
@@ -110,18 +111,39 @@ export default function App() {
     return <Splash />;
   }
 
+  // Returning user / reviewer: jump to sign-in even before the questionnaire
+  // (e.g. after sign-out wiped local data).
+  if (authStatus === 'signedOut' && wantsSignIn) {
+    return (
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style="light" />
+          <AuthScreen
+            initialMode="signIn"
+            onBack={() => setWantsSignIn(false)}
+          />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
   // Onboarding funnel (show value first, then ask to pay, then the account):
   //   1) questionnaire  →  2) paywall  →  3) create account  →  app
   // The questionnaire runs with no account; its answers live in the local store
   // and get pushed to the cloud once the user signs in at the end.
 
   // 1) Not onboarded → the questionnaire, straight away (no account needed).
-  if (!onboarded) {
+  //    reconfiguring = "Refaire le questionnaire" from settings (onboarded stays true).
+  if (!onboarded || reconfiguring) {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <OnboardingScreen />
+          <OnboardingScreen
+            onHaveAccount={
+              !onboarded ? () => setWantsSignIn(true) : undefined
+            }
+          />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );
@@ -132,22 +154,15 @@ export default function App() {
     return <Splash />;
   }
 
-  // 2) Account screen — shown when signed out AND either the anonymous trial is
+  // 2) Account screen — shown when signed out AND the anonymous trial is
   //    already active (new user finishing the funnel → create an account to
-  //    save progress) OR the user tapped "Se connecter" on the paywall
-  //    (returning user / reviewer). onBack returns to the paywall when one is
-  //    still behind (subscription not yet active).
-  if (authStatus === 'signedOut' && (subStatus === 'active' || wantsSignIn)) {
+  //    save progress). onBack is unused here (trial already active).
+  if (authStatus === 'signedOut' && subStatus === 'active') {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <AuthScreen
-            initialMode={wantsSignIn ? 'signIn' : 'signUp'}
-            onBack={
-              subStatus === 'inactive' ? () => setWantsSignIn(false) : undefined
-            }
-          />
+          <AuthScreen initialMode="signUp" />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );

@@ -31,11 +31,16 @@
     },
     "production": {
       "autoIncrement": true,
-      "ios": { "resourceClass": "m-medium" },
+      "ios": { "resourceClass": "m-medium", "image": "latest" },
       "android": {}
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6790794354",
+        "appleTeamId": "QN65J7X695"
+      }
+    }
   }
 }

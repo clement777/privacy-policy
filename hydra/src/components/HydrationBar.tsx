@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { C, FONTS, RADIUS } from '../theme/colors';
-import { HydrationState } from '../engine/hydrationEngine';
+import { displayLevelPct, HydrationState } from '../engine/hydrationEngine';
 
 interface Props {
   state: HydrationState;
@@ -19,7 +19,8 @@ export function HydrationBar({
   style,
   sportActive = false,
 }: Props) {
-  const filled = Math.round((state.levelPct / 100) * segments);
+  const pct = displayLevelPct(state.levelPct);
+  const filled = Math.round((pct / 100) * segments);
   const zoneColor =
     state.zone === 'poison'
       ? C.poison
@@ -54,7 +55,7 @@ export function HydrationBar({
         })}
       </View>
       <View style={styles.metaRow}>
-        <Text style={styles.pct}>{state.levelPct.toFixed(0)}%</Text>
+        <Text style={styles.pct}>{pct}%</Text>
         <Text style={[styles.status, { color: zoneColor }]}>
           {statusLabel(state)}
         </Text>

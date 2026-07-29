@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { C, FONTS, RADIUS } from '../theme/colors';
-import { HydrationState } from '../engine/hydrationEngine';
+import { displayLevelPct, HydrationState } from '../engine/hydrationEngine';
 
 // Faithful React-Native replicas of the native iOS widget (HydraWidget.swift)
 // and the landing mockup (hydra-landing/index.html). Rendered on web/Expo Go so
@@ -50,7 +50,8 @@ function Segments({
   height?: number;
 }) {
   const zc = zoneColor(state);
-  const filled = Math.round((state.levelPct / 100) * SEG);
+  const pct = displayLevelPct(state.levelPct);
+  const filled = Math.round((pct / 100) * SEG);
   return (
     <View style={styles.segRow}>
       {Array.from({ length: SEG }).map((_, i) => {
@@ -117,7 +118,7 @@ export function LockWidget({
       <View style={styles.headRow}>
         <Text style={[styles.brand, { color: '#fff' }]}>HYDRA</Text>
         <Text style={[styles.lockPct, { color: '#fff' }]}>
-          {Math.round(state.levelPct)}%
+          {displayLevelPct(state.levelPct)}%
         </Text>
       </View>
       <Segments state={state} mono height={10} />
@@ -154,7 +155,7 @@ export function SmallWidget({
         <Text style={styles.brand}>HYDRA</Text>
         <Text style={{ fontSize: 13 }}>💧</Text>
       </View>
-      <Text style={[styles.bigPct, { color: zc }]}>{Math.round(state.levelPct)}%</Text>
+      <Text style={[styles.bigPct, { color: zc }]}>{displayLevelPct(state.levelPct)}%</Text>
       <Segments state={state} />
       <View style={[styles.footRow, { marginTop: 'auto' }]}>
         <Text style={[styles.status, { color: zc }]}>{statusLabel(state)}</Text>
@@ -188,7 +189,7 @@ export function MediumWidget({
       <View style={styles.mTopRow}>
         <View style={styles.mLeft}>
           <Text style={styles.brand}>HYDRA</Text>
-          <Text style={[styles.mBig, { color: zc }]}>{Math.round(state.levelPct)}%</Text>
+          <Text style={[styles.mBig, { color: zc }]}>{displayLevelPct(state.levelPct)}%</Text>
           <Text style={[styles.status, { color: zc }]}>{statusLabel(state)}</Text>
         </View>
         <View style={styles.mMid}>

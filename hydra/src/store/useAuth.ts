@@ -3,6 +3,8 @@ import { Platform } from 'react-native';
 import type { Session, User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../lib/supabase';
+import { useHydration } from './useHydration';
+import { useSubscription } from './useSubscription';
 
 export type AuthStatus = 'loading' | 'signedOut' | 'signedIn';
 
@@ -115,8 +117,19 @@ export const useAuth = create<AuthState>((set, get) => ({
   },
 
   async signOut() {
+    // Auth first so cloud sync won't push during the local wipe.
     await supabase.auth.signOut();
     set({ session: null, user: null, status: 'signedOut' });
+    try {
+      await useSubscription.getState().logOut();
+    } catch {
+      /* RevenueCat optional */
+    }
+    try {
+      await useHydration.getState().resetLocalData();
+    } catch {
+      /* still signed out */
+    }
   },
 
   // Calls the `delete-account` Edge Function (service-role side), which removes

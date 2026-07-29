@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, FONTS, RADIUS } from '../theme/colors';
-import { awakeHoursFromSleep, ML_PER_KG_DAY, Sex } from '../engine/hydrationEngine';
+import { awakeHoursFromSleep, FEELING_LEVEL_PCT, FeelingKey, ML_PER_KG_DAY, Sex } from '../engine/hydrationEngine';
 import { useHydration } from '../store/useHydration';
 import { WATER_CONTAINERS } from '../store/widgetSettings';
 
@@ -22,8 +22,20 @@ const STEP_TITLES = [
   'TON RYTHME',
   'ENVIRONNEMENT',
   'TON EAU',
+  'ÉTAT',
   'RÉCAP',
 ] as const;
+
+const FEELING_OPTIONS: {
+  key: FeelingKey;
+  label: string;
+  hint: string;
+  pct: number;
+}[] = [
+  { key: 'good', label: 'BIEN', hint: 'Hydraté, en forme', pct: FEELING_LEVEL_PCT.good },
+  { key: 'ok', label: 'MOYEN', hint: 'Un peu fatigué / soif', pct: FEELING_LEVEL_PCT.ok },
+  { key: 'dry', label: 'ASSÉCHÉ', hint: 'Soif, tête lourde', pct: FEELING_LEVEL_PCT.dry },
+];
 
 const LAST = STEP_TITLES.length - 1;
 
@@ -105,7 +117,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const hourFmt = (h: number) => `${h}h`;
 
-export function OnboardingScreen() {
+export function OnboardingScreen({
+  onHaveAccount,
+}: {
+  onHaveAccount?: () => void;
+} = {}) {
   const { profile, widget, completeOnboarding } = useHydration();
 
   const [step, setStep] = useState(0);
@@ -128,6 +144,7 @@ export function OnboardingScreen() {
   const isPreset = WATER_CONTAINERS.some((c) => c.ml === widget.defaultWaterMl);
   const [customMode, setCustomMode] = useState(!isPreset);
   const [customMl, setCustomMl] = useState(String(widget.defaultWaterMl));
+  const [feeling, setFeeling] = useState<FeelingKey>('ok');
 
   const need = Math.round(weightKg * ML_PER_KG_DAY);
   const awakeHours = awakeHoursFromSleep(sleepStartHour, sleepEndHour);
@@ -190,6 +207,7 @@ export function OnboardingScreen() {
         ambientTempC: envOn ? ambientTempC : null,
         relativeHumidityPct: envOn ? relativeHumidityPct : null,
         altitudeM,
+        initialLevelPct: FEELING_LEVEL_PCT[feeling],
       },
       { defaultWaterMl: water }
     );
@@ -240,6 +258,20 @@ export function OnboardingScreen() {
               Ça prend 30 secondes. Tout est modifiable ensuite dans WIDGETS →
               PROFIL.
             </Text>
+            {onHaveAccount ? (
+              <Pressable
+                onPress={() => {
+                  tap();
+                  onHaveAccount();
+                }}
+                hitSlop={8}
+                style={styles.haveAccountWrap}
+              >
+                <Text style={styles.haveAccount}>
+                  Déjà un compte ? Se connecter
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
 
@@ -468,6 +500,48 @@ export function OnboardingScreen() {
 
         {step === 5 && (
           <>
+            <Text style={styles.help}>
+              On ne te connaît pas encore. Dis-nous comment tu te sens
+              maintenant — la barre démarre là, pas à 100 %.
+            </Text>
+            <View style={styles.feelingList}>
+              {FEELING_OPTIONS.map((opt) => {
+                const on = feeling === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    style={[styles.feelingCard, on && styles.feelingCardOn]}
+                    onPress={() => {
+                      tap();
+                      setFeeling(opt.key);
+                    }}
+                  >
+                    <View style={styles.feelingTop}>
+                      <Text
+                        style={[styles.feelingLabel, on && styles.feelingTxtOn]}
+                      >
+                        {opt.label}
+                      </Text>
+                      <Text
+                        style={[styles.feelingPct, on && styles.feelingTxtOn]}
+                      >
+                        {opt.pct} %
+                      </Text>
+                    </View>
+                    <Text
+                      style={[styles.feelingHint, on && styles.feelingHintOn]}
+                    >
+                      {opt.hint}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {step === 6 && (
+          <>
             <Text style={styles.help}>Tout est prêt. Vérifie et démarre.</Text>
             <View style={styles.recap}>
               <RecapRow label="Sexe" value={sex === 'male' ? 'Homme' : 'Femme'} />
@@ -487,6 +561,10 @@ export function OnboardingScreen() {
                 }
               />
               <RecapRow label="Contenant eau" value={`${defaultWaterMl} mL`} />
+              <RecapRow
+                label="État de départ"
+                value={`${FEELING_OPTIONS.find((o) => o.key === feeling)?.label ?? feeling} · ${FEELING_LEVEL_PCT[feeling]} %`}
+              />
             </View>
           </>
         )}
@@ -648,6 +726,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  haveAccountWrap: { marginTop: 28, alignItems: 'center' },
+  haveAccount: {
+    color: C.segmentFull,
+    fontFamily: FONTS.label,
+    fontSize: 12,
+    letterSpacing: 1,
+    textDecorationLine: 'underline',
+  },
 
   help: {
     color: C.textDim,
@@ -766,6 +852,45 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   containerOn: { borderColor: C.segmentFull, backgroundColor: '#0d1a12' },
+
+  feelingList: { gap: 10, marginTop: 4 },
+  feelingCard: {
+    borderWidth: 1,
+    borderColor: C.segmentEmpty,
+    borderRadius: RADIUS.md,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: C.bgSoft,
+  },
+  feelingCardOn: {
+    borderColor: C.segmentFull,
+    backgroundColor: '#0d1a12',
+  },
+  feelingTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  feelingLabel: {
+    color: C.text,
+    fontFamily: FONTS.label,
+    fontSize: 14,
+    letterSpacing: 2,
+  },
+  feelingPct: {
+    color: C.textDim,
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+  },
+  feelingTxtOn: { color: C.segmentFull },
+  feelingHint: {
+    color: C.textDim,
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  feelingHintOn: { color: C.text },
   containerValueRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
