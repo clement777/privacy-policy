@@ -66,6 +66,32 @@ export default function App() {
   // (returning users reinstalling, or the App Store reviewer signing in).
   const [wantsSignIn, setWantsSignIn] = useState(false);
 
+  // Signing in makes the detour above obsolete, and leaving it set is what App
+  // Review reported twice as "no action took place": the sign-in branch requires
+  // signedOut, so once authenticated it stops matching and the questionnaire
+  // renders instead — while its "Déjà un compte ?" link stayed on screen. Tapping
+  // it re-set a flag that was already true, so React re-rendered nothing and the
+  // link was simply dead. Clearing the flag keeps the two in step.
+  useEffect(() => {
+    if (authStatus !== 'signedOut') setWantsSignIn(false);
+  }, [authStatus]);
+
+  // What actually flips `onboarded` for a returning user is the first cloud pull,
+  // which lands a beat after auth resolves. Without a grace period they are
+  // dropped back into the questionnaire they already completed (exactly the
+  // "renvoyé sur BIENVENUE" loop). Bounded: an empty or failed pull falls through
+  // to the questionnaire rather than stranding anyone on the splash.
+  const [awaitingSync, setAwaitingSync] = useState(false);
+  useEffect(() => {
+    if (authStatus !== 'signedIn' || onboarded) {
+      setAwaitingSync(false);
+      return;
+    }
+    setAwaitingSync(true);
+    const id = setTimeout(() => setAwaitingSync(false), 5000);
+    return () => clearTimeout(id);
+  }, [authStatus, onboarded]);
+
   useEffect(() => {
     ensurePermissions().catch(() => {});
     // Bring up auth, then wire cloud sync (sign-in + debounced local changes).
@@ -111,6 +137,12 @@ export default function App() {
     return <Splash />;
   }
 
+  // Just signed in, cloud profile not merged yet — hold rather than flash the
+  // questionnaire at someone who already finished it. Self-releases after 5 s.
+  if (awaitingSync) {
+    return <Splash />;
+  }
+
   // Returning user / reviewer: jump to sign-in even before the questionnaire
   // (e.g. after sign-out wiped local data).
   if (authStatus === 'signedOut' && wantsSignIn) {
@@ -140,8 +172,18 @@ export default function App() {
         <SafeAreaProvider>
           <StatusBar style="light" />
           <OnboardingScreen
+            // Signed out only: offering "I already have an account" to someone
+            // who IS signed in produced a link that could not do anything.
             onHaveAccount={
-              !onboarded ? () => setWantsSignIn(true) : undefined
+              !onboarded && authStatus === 'signedOut'
+                ? () => setWantsSignIn(true)
+                : undefined
+            }
+            // …and once signed in with an account that carries no cloud profile
+            // (a fresh Apple ID, say), the questionnaire is the right screen —
+            // but there must still be a way back out to another account.
+            onSignOut={
+              authStatus === 'signedIn' ? () => useAuth.getState().signOut() : undefined
             }
           />
         </SafeAreaProvider>

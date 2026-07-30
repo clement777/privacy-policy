@@ -119,8 +119,14 @@ const hourFmt = (h: number) => `${h}h`;
 
 export function OnboardingScreen({
   onHaveAccount,
+  onSignOut,
 }: {
+  // Set only when signed OUT — a sign-in shortcut shown to an already
+  // authenticated user cannot navigate anywhere and reads as a dead button.
   onHaveAccount?: () => void;
+  // Set only when signed IN: an account with no cloud profile legitimately
+  // lands here, and needs an exit toward a different account.
+  onSignOut?: () => void;
 } = {}) {
   const { profile, widget, completeOnboarding } = useHydration();
 
@@ -271,6 +277,24 @@ export function OnboardingScreen({
                   Déjà un compte ? Se connecter
                 </Text>
               </Pressable>
+            ) : onSignOut ? (
+              <View style={styles.haveAccountWrap}>
+                <Text style={styles.signedInNote}>
+                  Tu es connecté, mais ce compte n’a pas encore de profil
+                  HYDRA. Complète le questionnaire, ou change de compte.
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    tap();
+                    onSignOut();
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={styles.haveAccount}>
+                    Utiliser un autre compte
+                  </Text>
+                </Pressable>
+              </View>
             ) : null}
           </View>
         )}
@@ -726,7 +750,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  haveAccountWrap: { marginTop: 28, alignItems: 'center' },
+  haveAccountWrap: { marginTop: 28, alignItems: 'center', gap: 10 },
+  signedInNote: {
+    color: C.textDim,
+    fontFamily: FONTS.mono,
+    fontSize: 11.5,
+    lineHeight: 17,
+    textAlign: 'center',
+  },
   haveAccount: {
     color: C.segmentFull,
     fontFamily: FONTS.label,
