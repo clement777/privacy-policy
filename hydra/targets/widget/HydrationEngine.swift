@@ -2,7 +2,9 @@ import Foundation
 
 // Strict port of src/engine/hydrationEngine.ts (v2 physiological model).
 // Any change to the TS source of truth MUST land here in the same commit.
-// The tests in HydrationEngineTests.swift mirror the 8 acceptance cases.
+// The port is guarded by src/engine/__parity__/ — swiftReplica.ts is a
+// transliteration of this file and swiftParity.test.ts diffs it against the TS
+// engine, so a change made here without one there fails CI. Keep the two in step.
 
 enum Sex: String, Codable { case male, female }
 enum SportIntensity: String, Codable { case light, moderate, intense }
@@ -246,6 +248,15 @@ func peakPoisonExtra(_ ethanolG: Double, _ abv: Double) -> Double {
     return gramsCurve * concentrationFactor(abv)
 }
 
+private func poisonExtraFromEvent(_ eventAt: TimeInterval, _ ethanolG: Double, _ abv: Double, _ t: TimeInterval) -> Double {
+    let dt = t - eventAt
+    if dt < 0 || dt > POISON_WINDOW_MS { return 0 }
+    let peakExtra = peakPoisonExtra(ethanolG, abv)
+    let rise = dt / POISON_PEAK_MS
+    let fall = (POISON_WINDOW_MS - dt) / POISON_PEAK_MS
+    return peakExtra * min(rise, fall)
+}
+
 private func poisonEndsAt(_ events: [HydrationEvent], _ now: TimeInterval) -> TimeInterval? {
     var end: TimeInterval? = nil
     for e in events where e.type == .alcohol {
@@ -255,17 +266,47 @@ private func poisonEndsAt(_ events: [HydrationEvent], _ now: TimeInterval) -> Ti
     return end
 }
 
-private func isSleeping(at ms: TimeInterval, _ p: UserProfile) -> Bool {
-    // One calendar call (start-of-day) instead of hour/minute/second components.
-    let date = Date(timeIntervalSince1970: ms / 1000)
-    let start = Calendar.current.startOfDay(for: date)
-    let h = date.timeIntervalSince(start) / 3600
+// ————————— Local hour-of-day (no Calendar) —————————
+//
+// The integrator asks "is the user asleep?" once per MINUTE of history, and the
+// old implementation answered it with `Calendar.current.dateComponents`, which
+// allocates a DateComponents and goes through the locale machinery every time.
+// On a month of history that is ~43 000 Calendar round-trips PER computed state,
+// and the widget computes ~120 states per timeline — it was the single largest
+// cost in the extension. The UTC offset only moves on a DST boundary, so we
+// resolve it once per calendar day and reuse it across the whole walk (time only
+// ever moves forward here, so a one-slot cache is enough).
+struct TZOffsetCache {
+    private var lastDay: Int = .min
+    private var offsetSec: Double = 0
+
+    mutating func offset(atMs ms: TimeInterval) -> Double {
+        let day = Int((ms / 86_400_000).rounded(.down))
+        if day != lastDay {
+            lastDay = day
+            offsetSec = Double(TimeZone.current.secondsFromGMT(
+                for: Date(timeIntervalSince1970: ms / 1000)))
+        }
+        return offsetSec
+    }
+}
+
+private func localHour(_ ms: TimeInterval, _ tz: inout TZOffsetCache) -> Double {
+    let local = ms / 1000 + tz.offset(atMs: ms)
+    var s = local.truncatingRemainder(dividingBy: 86_400)
+    if s < 0 { s += 86_400 }
+    return s / 3600
+}
+
+private func isSleeping(hour h: Double, _ p: UserProfile) -> Bool {
     let a = p.sleepStartHour, b = p.sleepEndHour
     if a == b { return false }
     return a < b ? (h >= a && h < b) : (h >= a || h < b)
 }
 
-private func applyProfilePatch(_ p: inout UserProfile, _ patch: ProfilePatch) {
+// Mirror the TS `{ ...p, ...e.patch }` spread: override only the fields the
+// patch actually carries, leaving the rest untouched.
+private func applyPatch(_ patch: ProfilePatch, to p: inout UserProfile) {
     if let v = patch.weightKg { p.weightKg = v }
     if let v = patch.sex { p.sex = v }
     if let v = patch.awakeHours { p.awakeHours = v }
@@ -282,101 +323,109 @@ private func effectiveProfile(_ events: [HydrationEvent], _ at: TimeInterval, _ 
     var p = base
     for e in events {
         if e.at > at { break }
-        if e.type == .profile, let patch = e.patch {
-            applyProfilePatch(&p, patch)
-        }
+        if e.type == .profile, let patch = e.patch { applyPatch(patch, to: &p) }
     }
     return p
 }
 
-// ————————— Derived event data (mirrors TS) —————————
+private func drainMlPerMs(_ p: UserProfile, poisonMult: Double, sleeping: Bool) -> Double {
+    var mult = 1.0
+    mult *= tempMultiplier(p.ambientTempC)
+    mult *= altitudeMultiplier(p.altitudeM)
+    mult *= poisonMult
+    if sleeping { mult *= SLEEP_MULTIPLIER }
+    return (baseDrainMlPerHour(p) * mult) / 3_600_000
+}
+
+// ————————— Derived event data (cached across calls) —————————
 //
-// Built once per event list: sorted copy, extracted profile/alcohol/sport lists,
-// O(n) absorption credits. Integrator + forecast reuse these instead of
-// re-scanning the full history every minute.
-
-private struct AlcoholPeak {
-    let at: TimeInterval
-    let peak: Double
-}
-
-private struct SportWindow {
-    let at: TimeInterval
-    let endAt: TimeInterval
-    let intensity: SportIntensity
-}
-
-private struct ProfileEvt {
-    let at: TimeInterval
-    let patch: ProfilePatch
-}
-
-private final class Derived {
+// Mirrors the `Derived` cache in src/engine/hydrationEngine.ts. The integrator
+// samples minute by minute from the first event to `now`, and it used to re-scan
+// the FULL event list three times per step (profile / alcohol / sport), re-sort
+// on every call, and recompute the O(n²) absorption credits twice. Cost grew
+// with (days of history × total events), which is exactly what made the widget
+// take seconds to redraw after a tap.
+//
+// Nothing below depends on `at`, only on the event list, so it is derived once
+// and reused. Immutable by construction → safe to hand to WidgetKit's background
+// queues without a lock on the object itself.
+final class Derived: @unchecked Sendable {
     let sorted: [HydrationEvent]
-    let profileEvts: [ProfileEvt]
-    let alcohol: [AlcoholPeak]
-    let sport: [SportWindow]
+    let profileEvts: [(at: TimeInterval, patch: ProfilePatch)]
+    /// Alcohol events with their poison peak precomputed. Sorted ascending.
+    let alcohol: [(at: TimeInterval, peak: Double)]
+    let sport: [(at: TimeInterval, endAt: TimeInterval, intensity: SportIntensity)]
     let credited: [Double]
-    var memo: [TimeInterval: HydrationState] = [:]
-    var memoProfile: UserProfile?
 
-    init(
-        sorted: [HydrationEvent],
-        profileEvts: [ProfileEvt],
-        alcohol: [AlcoholPeak],
-        sport: [SportWindow],
-        credited: [Double]
-    ) {
-        self.sorted = sorted
+    init(_ events: [HydrationEvent]) {
+        let s = events.sorted { $0.at < $1.at }
+        var profileEvts: [(at: TimeInterval, patch: ProfilePatch)] = []
+        var alcohol: [(at: TimeInterval, peak: Double)] = []
+        var sport: [(at: TimeInterval, endAt: TimeInterval, intensity: SportIntensity)] = []
+        for e in s {
+            switch e.type {
+            case .profile:
+                if let patch = e.patch { profileEvts.append((e.at, patch)) }
+            case .alcohol:
+                guard let vol = e.volumeMl, let abv = e.abv else { continue }
+                alcohol.append((e.at, peakPoisonExtra(ethanolGrams(volumeMl: vol, abv: abv), abv)))
+            case .sport:
+                guard let dur = e.durationMin, let intensity = e.intensity else { continue }
+                sport.append((e.at, e.at + dur * 60_000, intensity))
+            default:
+                break
+            }
+        }
+        self.sorted = s
         self.profileEvts = profileEvts
         self.alcohol = alcohol
         self.sport = sport
-        self.credited = credited
+        self.credited = creditedWaterMl(s)
     }
 }
 
-private let MEMO_MAX = 512
-
-private func derive(_ events: [HydrationEvent]) -> Derived {
-    let sorted = events.sorted { $0.at < $1.at }
-    var profileEvts: [ProfileEvt] = []
-    var alcohol: [AlcoholPeak] = []
-    var sport: [SportWindow] = []
-    for e in sorted {
-        switch e.type {
-        case .profile:
-            if let patch = e.patch {
-                profileEvts.append(ProfileEvt(at: e.at, patch: patch))
-            }
-        case .alcohol:
-            let vol = e.volumeMl ?? 0
-            let abv = e.abv ?? 0
-            alcohol.append(AlcoholPeak(
-                at: e.at,
-                peak: peakPoisonExtra(ethanolGrams(volumeMl: vol, abv: abv), abv)
-            ))
-        case .sport:
-            if let dur = e.durationMin, let intensity = e.intensity {
-                sport.append(SportWindow(
-                    at: e.at,
-                    endAt: e.at + dur * 60_000,
-                    intensity: intensity
-                ))
-            }
-        default:
-            break
-        }
+// Swift arrays are values, so there is no identity to key a WeakMap on the way
+// the TS engine does. A fingerprint over (count, span, checksum of timestamps)
+// is enough: in both the app and the widget the log only ever grows by append,
+// and a miss just means recomputing what we would have computed anyway.
+private func fingerprint(_ events: [HydrationEvent]) -> String {
+    var sum: Double = 0
+    var lo = Double.greatestFiniteMagnitude
+    var hi = -Double.greatestFiniteMagnitude
+    for e in events {
+        sum += e.at
+        if e.at < lo { lo = e.at }
+        if e.at > hi { hi = e.at }
     }
-    return Derived(
-        sorted: sorted,
-        profileEvts: profileEvts,
-        alcohol: alcohol,
-        sport: sport,
-        credited: creditedWaterMl(sorted)
-    )
+    return "\(events.count)|\(lo)|\(hi)|\(sum)"
 }
 
-private func poisonMultFrom(_ alcohol: [AlcoholPeak], _ t: TimeInterval) -> Double {
+private final class DerivedCache: @unchecked Sendable {
+    static let shared = DerivedCache()
+    private let lock = NSLock()
+    private var key = ""
+    private var value: Derived?
+
+    func lookup(_ k: String) -> Derived? {
+        lock.lock(); defer { lock.unlock() }
+        return key == k ? value : nil
+    }
+    func store(_ k: String, _ v: Derived) {
+        lock.lock(); key = k; value = v; lock.unlock()
+    }
+}
+
+func derive(_ events: [HydrationEvent]) -> Derived {
+    let k = fingerprint(events)
+    if let hit = DerivedCache.shared.lookup(k) { return hit }
+    let d = Derived(events)
+    DerivedCache.shared.store(k, d)
+    return d
+}
+
+// Poison multiplier from the pre-extracted alcohol list (sorted ascending, so we
+// can stop as soon as an event is in the future).
+private func poisonMultFrom(_ alcohol: [(at: TimeInterval, peak: Double)], _ t: TimeInterval) -> Double {
     var extra: Double = 0
     for a in alcohol {
         if a.at > t { break }
@@ -390,10 +439,8 @@ private func poisonMultFrom(_ alcohol: [AlcoholPeak], _ t: TimeInterval) -> Doub
 }
 
 private func sportLossFrom(
-    _ sport: [SportWindow],
-    _ t0: TimeInterval,
-    _ t1: TimeInterval,
-    _ p: UserProfile
+    _ sport: [(at: TimeInterval, endAt: TimeInterval, intensity: SportIntensity)],
+    _ t0: TimeInterval, _ t1: TimeInterval, _ p: UserProfile
 ) -> Double {
     var loss: Double = 0
     for e in sport {
@@ -406,43 +453,48 @@ private func sportLossFrom(
     return loss
 }
 
-private func drainMlPerMs(_ p: UserProfile, poisonMult: Double, sleeping: Bool) -> Double {
-    var mult = 1.0
-    mult *= tempMultiplier(p.ambientTempC)
-    mult *= altitudeMultiplier(p.altitudeM)
-    mult *= poisonMult
-    if sleeping { mult *= SLEEP_MULTIPLIER }
-    return (baseDrainMlPerHour(p) * mult) / 3_600_000
+// mL lost over ONE sampling step [t, next], the profile already resolved for it.
+// Factored out so the timeline path (computeStateSeries) can replay the exact
+// same steps in the exact same order as integrateLoss and land on bit-identical
+// levels — a re-partitioned quadrature grid drifts by a fraction of a mL, which
+// is enough to round the displayed % differently from the app.
+private func stepLoss(
+    _ d: Derived, _ t: TimeInterval, _ next: TimeInterval,
+    _ p: UserProfile, _ tz: inout TZOffsetCache
+) -> Double {
+    let mid = (t + next) / 2
+    let poison = d.alcohol.isEmpty ? 1.0 : poisonMultFrom(d.alcohol, mid)
+    var loss = drainMlPerMs(p, poisonMult: poison,
+                            sleeping: isSleeping(hour: localHour(mid, &tz), p)) * (next - t)
+    if !d.sport.isEmpty { loss += sportLossFrom(d.sport, t, next, p) }
+    return loss
 }
 
-/// Integrate loss using pre-extracted lists + a profile cursor (no full rescans).
+// Integrate total mL lost between `from` and `to`.
+// Time only moves forward, so the profile is carried across steps behind a
+// pointer and rebuilt solely when a profile event is actually crossed — instead
+// of re-deriving it from the whole event list on every minute.
 private func integrateLoss(
-    _ d: Derived,
-    _ from: TimeInterval,
-    _ to: TimeInterval,
-    _ baseProfile: UserProfile
+    _ d: Derived, _ from: TimeInterval, _ to: TimeInterval,
+    _ base: UserProfile, _ tz: inout TZOffsetCache
 ) -> Double {
     if to <= from { return 0 }
     var acc: Double = 0
     var t = from
+
     var pi = 0
-    var p = baseProfile
-    let applyProfilesUpTo: (TimeInterval) -> Void = { at in
-        while pi < d.profileEvts.count && d.profileEvts[pi].at <= at {
-            applyProfilePatch(&p, d.profileEvts[pi].patch)
-            pi += 1
-        }
+    var p = base
+    while pi < d.profileEvts.count && d.profileEvts[pi].at <= from {
+        applyPatch(d.profileEvts[pi].patch, to: &p); pi += 1
     }
-    applyProfilesUpTo(from)
+
     while t < to {
         let next = min(t + STEP_MS, to)
         let mid = (t + next) / 2
-        applyProfilesUpTo(mid)
-        let poison = poisonMultFrom(d.alcohol, mid)
-        acc += drainMlPerMs(p, poisonMult: poison, sleeping: isSleeping(at: mid, p)) * (next - t)
-        if !d.sport.isEmpty {
-            acc += sportLossFrom(d.sport, t, next, p)
+        while pi < d.profileEvts.count && d.profileEvts[pi].at <= mid {
+            applyPatch(d.profileEvts[pi].patch, to: &p); pi += 1
         }
+        acc += stepLoss(d, t, next, p, &tz)
         t = next
     }
     return acc
@@ -495,9 +547,13 @@ private func fluidIntakeMl(_ e: HydrationEvent) -> Double {
     }
 }
 
-// Sliding-window O(n) absorption credits (was O(n²)).
+// Rolling hourly absorption cap — parallel array of credited mL per event
+// (water, electrolytes, AND alcohol's water).
 func creditedWaterMl(_ sorted: [HydrationEvent]) -> [Double] {
     var credited = [Double](repeating: 0, count: sorted.count)
+    // Sliding window over the trailing hour instead of re-summing the whole
+    // history for every event (was O(n²) — the dominant cost once a user had a
+    // few hundred events, and it ran twice per computeState call).
     var win: [(at: TimeInterval, credited: Double)] = []
     var used: Double = 0
     var head = 0
@@ -520,11 +576,7 @@ func creditedWaterMl(_ sorted: [HydrationEvent]) -> [Double] {
     return credited
 }
 
-func waterAbsorbedInWindow(_ sorted: [HydrationEvent], _ at: TimeInterval) -> Double {
-    absorbedInWindowFrom(derive(sorted), at)
-}
-
-private func absorbedInWindowFrom(_ d: Derived, _ at: TimeInterval) -> Double {
+private func absorbedInWindow(_ d: Derived, _ at: TimeInterval) -> Double {
     var used: Double = 0
     for i in 0..<d.sorted.count {
         let e = d.sorted[i]
@@ -534,6 +586,10 @@ private func absorbedInWindowFrom(_ d: Derived, _ at: TimeInterval) -> Double {
     return used
 }
 
+func waterAbsorbedInWindow(_ events: [HydrationEvent], _ at: TimeInterval) -> Double {
+    return absorbedInWindow(derive(events), at)
+}
+
 private func applyEventImpact(_ e: HydrationEvent, _ levelMl: Double, _ cap: Double, _ creditedMl: Double) -> Double {
     switch e.type {
     case .water:
@@ -541,6 +597,7 @@ private func applyEventImpact(_ e: HydrationEvent, _ levelMl: Double, _ cap: Dou
     case .electrolytes:
         return clamp(levelMl + creditedMl * 1.1, 0, cap)
     case .alcohol:
+        // Absorbed water (capped) minus full diuresis; saturated → net can go negative.
         return clamp(levelMl + creditedMl - alcoholDiuresisMl(volumeMl: e.volumeMl ?? 0, abv: e.abv ?? 0), 0, cap)
     case .caffeine:
         return clamp(levelMl + caffeineNetMl(e), 0, cap)
@@ -549,61 +606,49 @@ private func applyEventImpact(_ e: HydrationEvent, _ levelMl: Double, _ cap: Dou
     }
 }
 
-private func memoize(_ d: Derived, _ at: TimeInterval, _ s: HydrationState) -> HydrationState {
-    if d.memo.count >= MEMO_MAX { d.memo.removeAll(keepingCapacity: true) }
-    d.memo[at] = s
-    return s
-}
+let FORECAST_HORIZON_MS: TimeInterval = 6 * 3_600_000
 
-private func finalizeState(
-    _ d: Derived,
-    at: TimeInterval,
-    levelMl rawLevel: Double,
-    baseProfile: UserProfile,
-    ambleAt: TimeInterval? = nil,
-    redAt: TimeInterval? = nil,
-    computeForecast: Bool = true
-) -> HydrationState {
-    let profileNow = effectiveProfile(d.sorted, at, baseProfile)
-    let capNow = dailyNeedMl(profileNow)
-    let levelMl = clamp(rawLevel, 0, capNow)
-    let poisonMult = poisonMultFrom(d.alcohol, at)
-    let poisoned = poisonMult > 1.0
-    let poisonUntil = poisoned ? poisonEndsAt(d.sorted, at) : nil
-    let levelPct = (levelMl / capNow) * 100
-    let zone = zoneOf(pct: levelPct, poisoned: poisoned)
-    let crossings: (TimeInterval?, TimeInterval?)
-    if computeForecast {
-        crossings = forecastFrom(d, at: at, startLevelMl: levelMl, baseProfile: baseProfile)
-    } else {
-        crossings = (ambleAt, redAt)
-    }
-    let absorbed = absorbedInWindowFrom(d, at)
-    return HydrationState(
-        levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
-        zone: zone, poisoned: poisoned, poisonUntil: poisonUntil,
-        poisonMult: poisonMult, ambleAt: crossings.0, redAt: crossings.1,
-        absorbedLastHourMl: absorbed, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
-        saturated: absorbed >= MAX_WATER_ABSORB_ML_PER_H * 0.98
-    )
-}
-
-/// Replay all events up to (and including) those with `e.at <= cursorEnd`,
-/// returning level just after the last applied event (or anchor if none).
-private func levelAfterEvents(_ d: Derived, baseProfile: UserProfile) -> (levelMl: Double, cursor: TimeInterval)? {
+// Bar level at `at` BEFORE the final 0…cap clamp. Kept unclamped so the widget's
+// timeline can carry it forward from one entry to the next (see
+// computeStateSeries) and still land on exactly the value a from-scratch
+// computeState would produce.
+private func rawLevelMl(_ d: Derived, _ at: TimeInterval, _ base: UserProfile) -> Double {
     let sorted = d.sorted
-    guard let first = sorted.first else { return nil }
-    let startProfile = effectiveProfile(sorted, first.at, baseProfile)
-    var levelMl = anchorLevelMl(startProfile)
-    var cursor = first.at
+    var pi = 0
+    var p = base
+    func advance(_ upTo: TimeInterval) {
+        while pi < d.profileEvts.count && d.profileEvts[pi].at <= upTo {
+            applyPatch(d.profileEvts[pi].patch, to: &p); pi += 1
+        }
+    }
+
+    advance(sorted[0].at)
+    var levelMl = anchorLevelMl(p)
+    var cursor = sorted[0].at
+    var tz = TZOffsetCache()
+
     for i in 0..<sorted.count {
         let e = sorted[i]
-        levelMl -= integrateLoss(d, cursor, e.at, baseProfile)
-        let p = effectiveProfile(sorted, e.at, baseProfile)
+        levelMl -= integrateLoss(d, cursor, e.at, base, &tz)
+        advance(e.at)
         levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), d.credited[i])
         cursor = e.at
     }
-    return (levelMl, cursor)
+    levelMl -= integrateLoss(d, cursor, at, base, &tz)
+    return levelMl
+}
+
+private func emptyState(_ profileNow: UserProfile) -> HydrationState {
+    // Use the declared % directly (avoids float noise around the 55 % amber edge).
+    let capNow = dailyNeedMl(profileNow)
+    let levelPct = resolveInitialLevelPct(profileNow)
+    return HydrationState(
+        levelMl: clamp((capNow * levelPct) / 100, 0, capNow),
+        dailyNeedMl: capNow, levelPct: levelPct,
+        zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
+        poisonMult: 1, ambleAt: nil, redAt: nil,
+        absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
+    )
 }
 
 func computeState(
@@ -611,105 +656,124 @@ func computeState(
     at: TimeInterval,
     profile baseProfile: UserProfile = .default
 ) -> HydrationState {
-    let d = derive(rawEvents)
-    if d.memoProfile.map({ $0.weightKg != baseProfile.weightKg
-        || $0.sex != baseProfile.sex
-        || $0.awakeHours != baseProfile.awakeHours
-        || $0.sleepStartHour != baseProfile.sleepStartHour
-        || $0.sleepEndHour != baseProfile.sleepEndHour
-        || $0.altitudeM != baseProfile.altitudeM
-        || $0.ambientTempC != baseProfile.ambientTempC
-        || $0.relativeHumidityPct != baseProfile.relativeHumidityPct
-        || $0.dailyGoalOverrideMl != baseProfile.dailyGoalOverrideMl
-        || $0.initialLevelPct != baseProfile.initialLevelPct }) ?? false {
-        d.memo.removeAll(keepingCapacity: true)
-    }
-    d.memoProfile = baseProfile
-    if let cached = d.memo[at] { return cached }
-
-    let profileNow = effectiveProfile(d.sorted, at, baseProfile)
-    let capNow = dailyNeedMl(profileNow)
-
-    if d.sorted.isEmpty {
-        let levelPct = resolveInitialLevelPct(profileNow)
-        let levelMl = clamp((capNow * levelPct) / 100, 0, capNow)
-        return memoize(d, at, HydrationState(
-            levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
-            zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
-            poisonMult: 1, ambleAt: nil, redAt: nil,
-            absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
-        ))
-    }
-
-    guard let replayed = levelAfterEvents(d, baseProfile: baseProfile) else {
-        return computeState(events: [], at: at, profile: baseProfile)
-    }
-    var levelMl = replayed.levelMl
-    levelMl -= integrateLoss(d, replayed.cursor, at, baseProfile)
-    return memoize(d, at, finalizeState(d, at: at, levelMl: levelMl, baseProfile: baseProfile))
+    return computeState(derived: derive(rawEvents), at: at, profile: baseProfile)
 }
 
-/// Compute many timestamps cheaply: replay events once, then carry the level
-/// forward with only the loss integrator between successive `ats`.
-/// `ats` must be sorted ascending. Used by the widget timeline (~120 entries).
-func computeStates(
+func computeState(
+    derived d: Derived,
+    at: TimeInterval,
+    profile baseProfile: UserProfile
+) -> HydrationState {
+    let sorted = d.sorted
+    let profileNow = effectiveProfile(sorted, at, baseProfile)
+    if sorted.isEmpty { return emptyState(profileNow) }
+
+    let capNow = dailyNeedMl(profileNow)
+    let levelMl = clamp(rawLevelMl(d, at, baseProfile), 0, capNow)
+    let (ambleAt, redAt) = forecastFrom(d, at, levelMl, baseProfile, FORECAST_HORIZON_MS)
+    return assemble(d, at, levelMl, capNow, ambleAt, redAt)
+}
+
+// Pack a level into the full state. Shared by the single-shot and the timeline
+// paths so both surfaces can never drift.
+private func assemble(
+    _ d: Derived, _ at: TimeInterval, _ levelMl: Double, _ capNow: Double,
+    _ ambleAt: TimeInterval?, _ redAt: TimeInterval?
+) -> HydrationState {
+    let poisonMult = poisonMultFrom(d.alcohol, at)
+    let poisoned = poisonMult > 1.0
+    let levelPct = (levelMl / capNow) * 100
+    let absorbed = absorbedInWindow(d, at)
+    return HydrationState(
+        levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
+        zone: zoneOf(pct: levelPct, poisoned: poisoned), poisoned: poisoned,
+        poisonUntil: poisoned ? poisonEndsAt(d.sorted, at) : nil,
+        poisonMult: poisonMult, ambleAt: ambleAt, redAt: redAt,
+        absorbedLastHourMl: absorbed, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H,
+        saturated: absorbed >= MAX_WATER_ABSORB_ML_PER_H * 0.98
+    )
+}
+
+/// States at a strictly increasing sequence of instants, none of them before the
+/// most recent event. The widget builds ~120 timeline entries in one go; doing
+/// that with computeState re-integrated the ENTIRE history 120 times over, which
+/// is why the bar took seconds to move after a tap. Past `ats[0]` no new event
+/// can occur, so the level follows one deterministic curve: integrate the history
+/// once, then carry the level forward step by step.
+func computeStateSeries(
     events rawEvents: [HydrationEvent],
     ats: [TimeInterval],
     profile baseProfile: UserProfile = .default
 ) -> [HydrationState] {
-    guard !ats.isEmpty else { return [] }
+    if ats.isEmpty { return [] }
     let d = derive(rawEvents)
+    let sorted = d.sorted
+    let first = ats[0]
 
-    if d.sorted.isEmpty {
-        return ats.map { at in
-            let profileNow = effectiveProfile(d.sorted, at, baseProfile)
-            let capNow = dailyNeedMl(profileNow)
-            let levelPct = resolveInitialLevelPct(profileNow)
-            let levelMl = clamp((capNow * levelPct) / 100, 0, capNow)
-            return HydrationState(
-                levelMl: levelMl, dailyNeedMl: capNow, levelPct: levelPct,
-                zone: zoneOf(pct: levelPct, poisoned: false), poisoned: false, poisonUntil: nil,
-                poisonMult: 1, ambleAt: nil, redAt: nil,
-                absorbedLastHourMl: 0, absorbCapMl: MAX_WATER_ABSORB_ML_PER_H, saturated: false
-            )
-        }
+    // Carry-forward assumes nothing happens after `ats[0]`; if that doesn't hold
+    // (or there's no history at all) fall back to the general path.
+    guard let last = sorted.last, last.at <= first else {
+        return ats.map { computeState(derived: d, at: $0, profile: baseProfile) }
     }
 
-    guard let replayed = levelAfterEvents(d, baseProfile: baseProfile) else {
-        return ats.map { computeState(events: rawEvents, at: $0, profile: baseProfile) }
-    }
-    var levelMl = replayed.levelMl
-    var t = replayed.cursor
+    // Anchor on the LAST event, not on ats[0]: computeState integrates from there
+    // in whole STEP_MS steps plus one partial step landing on `at`, so replaying
+    // that same grid reproduces every entry exactly while sharing all the work.
+    // No event (profile included) lies after the anchor, so the profile — and
+    // therefore the cap — is fixed for the whole series.
+    let anchor = last.at
+    let p = effectiveProfile(sorted, anchor, baseProfile)
+    let capNow = dailyNeedMl(p)
+    let anchorLevel = rawLevelMl(d, anchor, baseProfile)
 
+    // One deterministic curve ⇒ the amber/red crossings are absolute instants,
+    // found ONCE over a horizon that covers the whole series instead of per entry.
+    let span = ats[ats.count - 1] - first
+    let (amber0, red0) = forecastFrom(
+        d, first, clamp(anchorLevel - integrateLossFromAnchor(d, anchor, first, p), 0, capNow),
+        baseProfile, FORECAST_HORIZON_MS + span)
+
+    var tz = TZOffsetCache()
+    var lost: Double = 0        // loss over whole steps from the anchor to gridT
+    var gridT = anchor
     var out: [HydrationState] = []
     out.reserveCapacity(ats.count)
-    var sharedAmble: TimeInterval? = nil
-    var sharedRed: TimeInterval? = nil
-    var first = true
     for at in ats {
-        if at >= t {
-            levelMl -= integrateLoss(d, t, at, baseProfile)
-            t = at
-        } else {
-            out.append(computeState(events: rawEvents, at: at, profile: baseProfile))
-            continue
+        while gridT + STEP_MS <= at {
+            lost += stepLoss(d, gridT, gridT + STEP_MS, p, &tz)
+            gridT += STEP_MS
         }
-        let state: HydrationState
-        if first {
-            state = finalizeState(d, at: at, levelMl: levelMl, baseProfile: baseProfile)
-            sharedAmble = state.ambleAt
-            sharedRed = state.redAt
-            first = false
-        } else {
-            // Crossing times are absolute; reuse them across the future timeline.
-            state = finalizeState(
-                d, at: at, levelMl: levelMl, baseProfile: baseProfile,
-                ambleAt: sharedAmble, redAt: sharedRed, computeForecast: false
-            )
-        }
-        out.append(state)
+        // The trailing partial step is per-entry and must NOT fold into `lost`.
+        let tail = gridT < at ? stepLoss(d, gridT, at, p, &tz) : 0
+        let horizonEnd = at + FORECAST_HORIZON_MS
+        out.append(assemble(
+            d, at, clamp(anchorLevel - (lost + tail), 0, capNow), capNow,
+            crossingAt(amber0, at, horizonEnd), crossingAt(red0, at, horizonEnd)))
     }
     return out
+}
+
+private func integrateLossFromAnchor(
+    _ d: Derived, _ anchor: TimeInterval, _ to: TimeInterval, _ p: UserProfile
+) -> Double {
+    var tz = TZOffsetCache()
+    var acc: Double = 0
+    var t = anchor
+    while t < to {
+        let next = min(t + STEP_MS, to)
+        acc += stepLoss(d, t, next, p, &tz)
+        t = next
+    }
+    return acc
+}
+
+// Re-express a crossing found from the head of the series for an entry at `at`:
+// already behind us → "now" (what forecastFrom returns when the level is already
+// past the threshold); beyond this entry's own 6 h horizon → not reported yet.
+private func crossingAt(_ t0: TimeInterval?, _ at: TimeInterval, _ horizonEnd: TimeInterval) -> TimeInterval? {
+    guard let t0 = t0 else { return nil }
+    if t0 <= at { return at }
+    return t0 <= horizonEnd ? t0 : nil
 }
 
 func forecast(
@@ -717,49 +781,50 @@ func forecast(
     at: TimeInterval,
     startLevelMl: Double,
     baseProfile: UserProfile,
-    horizonMs: TimeInterval = 6 * 3_600_000
+    horizonMs: TimeInterval = FORECAST_HORIZON_MS
 ) -> (TimeInterval?, TimeInterval?) {
-    return forecastFrom(derive(events), at: at, startLevelMl: startLevelMl, baseProfile: baseProfile, horizonMs: horizonMs)
+    return forecastFrom(derive(events), at, startLevelMl, baseProfile, horizonMs)
 }
 
 private func forecastFrom(
     _ d: Derived,
-    at fromAt: TimeInterval,
-    startLevelMl: Double,
-    baseProfile: UserProfile,
-    horizonMs: TimeInterval = 6 * 3_600_000
+    _ at: TimeInterval,
+    _ startLevelMl: Double,
+    _ baseProfile: UserProfile,
+    _ horizonMs: TimeInterval
 ) -> (TimeInterval?, TimeInterval?) {
-    let profileNow = effectiveProfile(d.sorted, fromAt, baseProfile)
+    let profileNow = effectiveProfile(d.sorted, at, baseProfile)
     let cap = dailyNeedMl(profileNow)
     let amberT = cap * 0.55
     let redT = cap * 0.25
-    var ambleAt: TimeInterval? = startLevelMl <= amberT ? fromAt : nil
-    var redAt: TimeInterval? = startLevelMl < redT ? fromAt : nil
+    var ambleAt: TimeInterval? = startLevelMl <= amberT ? at : nil
+    var redAt: TimeInterval? = startLevelMl < redT ? at : nil
     if ambleAt != nil && redAt != nil { return (ambleAt, redAt) }
 
-    var level = startLevelMl
-    var t = fromAt
-    let end = fromAt + horizonMs
     var pi = 0
     var p = baseProfile
-    let applyProfilesUpTo: (TimeInterval) -> Void = { upTo in
-        while pi < d.profileEvts.count && d.profileEvts[pi].at <= upTo {
-            applyProfilePatch(&p, d.profileEvts[pi].patch)
-            pi += 1
-        }
+    while pi < d.profileEvts.count && d.profileEvts[pi].at <= at {
+        applyPatch(d.profileEvts[pi].patch, to: &p); pi += 1
     }
-    applyProfilesUpTo(fromAt)
 
+    let hasSport = !d.sport.isEmpty
+    var tz = TZOffsetCache()
+    var level = startLevelMl
+    var t = at
+    let end = at + horizonMs
     while t < end {
         let next = min(t + STEP_MS, end)
         let dt = next - t
         let mid = (t + next) / 2
-        applyProfilesUpTo(mid)
+        while pi < d.profileEvts.count && d.profileEvts[pi].at <= mid {
+            applyPatch(d.profileEvts[pi].patch, to: &p); pi += 1
+        }
         let poison = poisonMultFrom(d.alcohol, mid)
         let before = level
-        let loss = drainMlPerMs(p, poisonMult: poison, sleeping: isSleeping(at: mid, p)) * dt
-            + (d.sport.isEmpty ? 0 : sportLossFrom(d.sport, t, next, p))
+        var loss = drainMlPerMs(p, poisonMult: poison, sleeping: isSleeping(hour: localHour(mid, &tz), p)) * dt
+        if hasSport { loss += sportLossFrom(d.sport, t, next, p) }
         let after = before - loss
+        // Interpolate the crossing within the step for a second-precise result.
         if ambleAt == nil && after <= amberT {
             let frac = loss > 0 ? (before - amberT) / loss : 0
             ambleAt = t + frac * dt

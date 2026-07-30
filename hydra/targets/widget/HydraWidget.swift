@@ -44,39 +44,50 @@ struct HydraProvider: TimelineProvider {
         // Dense entries so the home-screen % tracks the live app drain.
         // ~1.5 %/15 min of passive drain made a 15-min step look "off by 1 %".
         // 2-min steps for 4 h ≈ 120 entries (well within WidgetKit budgets).
-        var dates: [Date] = []
-        var i = 0.0
         let horizon: TimeInterval = 4 * 3600
         let step: TimeInterval = 2 * 60
+        var dates: [Date] = []
+        var i = 0.0
         while i <= horizon {
             dates.append(now.addingTimeInterval(i))
             i += step
         }
-        let entries: [HydraEntry]
-        if let snap = loadSharedSnapshot() {
-            let ats = dates.map { $0.timeIntervalSince1970 * 1000 }
-            // One event replay + carry-forward between timestamps (not 120× full history).
-            let states = computeStates(events: snap.events, ats: ats, profile: snap.profile)
-            entries = zip(dates, states).map { HydraEntry(date: $0, state: $1) }
-        } else {
-            entries = dates.map { date in
-                HydraEntry(date: date, state: HydrationState(
-                    levelMl: 2240, dailyNeedMl: 2240, levelPct: 100, zone: .green,
-                    poisoned: false, poisonUntil: nil, poisonMult: 1, ambleAt: nil, redAt: nil,
-                    absorbedLastHourMl: 0, absorbCapMl: 1000, saturated: false))
-            }
+
+        // The snapshot is decoded ONCE for the whole timeline and the states are
+        // produced in a single incremental pass. Before, every entry re-read and
+        // re-parsed the App Group JSON and then re-integrated the user's entire
+        // history from their first ever event — 120 times per reload. That work
+        // is what put 3+ seconds between tapping ＋EAU and the bar moving.
+        guard let snap = loadSharedSnapshot() else {
+            let entries = dates.map { HydraEntry(date: $0, state: HydraProvider.fallbackState) }
+            completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
+            return
+        }
+        let states = computeStateSeries(
+            events: snap.events,
+            ats: dates.map { $0.timeIntervalSince1970 * 1000 },
+            profile: snap.profile)
+        var entries: [HydraEntry] = []
+        entries.reserveCapacity(dates.count)
+        for (i, date) in dates.enumerated() where i < states.count {
+            entries.append(HydraEntry(date: date, state: states[i]))
         }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
     }
+
+    // Shown only when the App Group snapshot is missing or unreadable (app never
+    // launched since install).
+    static let fallbackState = HydrationState(
+        levelMl: 2240, dailyNeedMl: 2240, levelPct: 100, zone: .green,
+        poisoned: false, poisonUntil: nil, poisonMult: 1, ambleAt: nil, redAt: nil,
+        absorbedLastHourMl: 0, absorbCapMl: 1000, saturated: false)
+
     private func entry(at date: Date) -> HydraEntry {
         let ms = date.timeIntervalSince1970 * 1000
         if let snap = loadSharedSnapshot() {
             return HydraEntry(date: date, state: computeState(events: snap.events, at: ms, profile: snap.profile))
         }
-        return HydraEntry(date: date, state: HydrationState(
-            levelMl: 2240, dailyNeedMl: 2240, levelPct: 100, zone: .green,
-            poisoned: false, poisonUntil: nil, poisonMult: 1, ambleAt: nil, redAt: nil,
-            absorbedLastHourMl: 0, absorbCapMl: 1000, saturated: false))
+        return HydraEntry(date: date, state: HydraProvider.fallbackState)
     }
 }
 

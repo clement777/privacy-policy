@@ -43,6 +43,8 @@ enum HydraStore {
     static func logWater(volumeMl: Double) -> Bool {
         guard var snap = loadRW() else { return false }
         let now = Date().timeIntervalSince1970 * 1000
+        // waterAbsorbedInWindow sorts + credits through the shared Derived cache
+        // (see HydrationEngine) — no need to pre-sort a copy of the whole log here.
         let used = waterAbsorbedInWindow(snap.events, now)
         if used >= MAX_WATER_ABSORB_ML_PER_H * 0.98 { return false } // saturated
         snap.events.append(HydrationEvent(
@@ -82,7 +84,7 @@ struct LogWaterIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         HydraStore.logWater(volumeMl: Double(volumeMl ?? 250))
-        WidgetCenter.shared.reloadTimelines(ofKind: "HydraLockWidget")
+        WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
 }
@@ -101,7 +103,7 @@ struct LogAlcoholIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         HydraStore.logAlcohol(volumeMl: Double(volumeMl ?? 400), abv: Double(abv ?? 5))
-        WidgetCenter.shared.reloadTimelines(ofKind: "HydraLockWidget")
+        WidgetCenter.shared.reloadAllTimelines()
         return .result()
     }
 }
