@@ -73,14 +73,32 @@ ce qui existe dans App Store Connect.
 
 ### À faire (obligatoire)
 
+Il n'y a **pas** de section « Offres introductives » sur la page de l'abonnement :
+l'offre se crée à l'intérieur du bloc *Prix de l'abonnement*.
+
 1. App Store Connect → **Abonnements** → groupe **HYDRA Pro** → **HYDRA Pro Mensuel**
-2. Section **Offres introductives** (« Introductory Offers ») → **＋**
-3. Remplir :
-   - Pays/régions : **tous**
-   - Date de début : aujourd'hui · Date de fin : **aucune**
+2. Bloc **Prix de l'abonnement** → lien **« Prix et conceptions »** en haut à droite
+   (traduction FR ratée de *Pricing and Offers* / *View all subscription pricing*)
+3. **« Configurer une offre introductive »** (*Set up Introductory Offer*)
+4. Assistant en 5 étapes :
+   - Pays/régions : **tous** → Suivant
+   - Date de début : aujourd'hui · Date de fin : **vide** → Suivant
    - Type d'offre : **Essai gratuit** (*Free Trial*)
-   - Durée : **1 semaine**
-4. Enregistrer, puis vérifier que l'état passe à *Prêt à soumettre*.
+   - Durée : **1 semaine** — il n'existe pas d'option « 7 jours ». Les durées
+     proposées sont 3 jours, 1–2 semaines, 1–6 mois, 1 an.
+   - **Confirmer**
+
+Pièges :
+
+- **Non modifiable après création.** Pour changer l'offre il faut la supprimer et
+  en recréer une. Vérifier type + durée + pays avant de confirmer.
+- **Jusqu'à 1 h de propagation vers le sandbox.** Si l'essai n'apparaît pas tout
+  de suite dans la feuille de paiement, attendre avant de conclure à un bug.
+- Une personne ne peut consommer qu'**une seule** offre introductive par groupe
+  d'abonnements — un compte de test déjà utilisé ne reverra pas l'essai.
+- Le bouton **« Mettre à jour la vérification »** de la page de l'abonnement ne
+  suffit pas : voir l'ordre de resoumission plus bas, les trois éléments doivent
+  repartir ensemble.
 
 ### Côté code, en filet de sécurité ✅ fait
 
