@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSubscription } from '../store/useSubscription';
 import { useAuth } from '../store/useAuth';
+import { SourcesSheet } from '../components/SourcesSheet';
 import { C, FONTS, RADIUS } from '../theme/colors';
 
 // Standard Apple EULA (used unless you host your own Terms of Use).
@@ -23,6 +24,33 @@ const VALUE_PROPS = [
   ['🔒', 'Widget écran verrouillé', 'Ton hydratation en permanence sous les yeux, sans ouvrir l’app.'],
   ['📊', 'Moteur physiologique', 'Calculs basés sur ton corps et la vraie science, pas des points au hasard.'],
 ];
+
+// The introductory offer as StoreKit actually reports it. We must never promise
+// a free trial the payment sheet won't show: App Review rejected 1.0(5) under
+// guideline 2.1(b) precisely because the screen advertised 7 free days that the
+// purchase sheet didn't mention. So the offer copy is derived from the product,
+// never hard-coded — if the introductory offer is missing or misconfigured in
+// App Store Connect, the paywall degrades to plain pricing instead of lying.
+function freeTrialLabel(intro: {
+  price: number;
+  periodUnit: string;
+  periodNumberOfUnits: number;
+} | null): string | null {
+  if (!intro || intro.price > 0) return null;
+  const n = intro.periodNumberOfUnits;
+  switch (intro.periodUnit) {
+    case 'DAY':
+      return `${n} JOUR${n > 1 ? 'S' : ''} GRATUIT${n > 1 ? 'S' : ''}`;
+    case 'WEEK':
+      return n * 7 === 7 ? '7 JOURS GRATUITS' : `${n * 7} JOURS GRATUITS`;
+    case 'MONTH':
+      return `${n} MOIS GRATUIT${n > 1 ? 'S' : ''}`;
+    case 'YEAR':
+      return `${n} AN${n > 1 ? 'S' : ''} GRATUIT${n > 1 ? 'S' : ''}`;
+    default:
+      return null;
+  }
+}
 
 interface Props {
   // Jump to the account screen from the paywall (returning users reinstalling,
@@ -37,6 +65,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const { signOut, status: authStatus } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   useEffect(() => {
     loadOfferings();
@@ -44,6 +73,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
 
   const pkg = packages[0] ?? null;
   const priceLabel = pkg?.product.priceString ?? '3,99 €';
+  const trialLabel = freeTrialLabel(pkg?.product.introPrice ?? null);
 
   const onStart = async () => {
     setError(null);
@@ -84,11 +114,20 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
         </View>
 
         <View style={styles.offer}>
-          <Text style={styles.offerBig}>7 JOURS GRATUITS</Text>
+          <Text style={styles.offerBig}>
+            {trialLabel ?? `${priceLabel}/MOIS`}
+          </Text>
           <Text style={styles.offerSub}>
-            puis {priceLabel}/mois · annulable à tout moment
+            {trialLabel
+              ? `puis ${priceLabel}/mois · annulable à tout moment`
+              : 'abonnement · annulable à tout moment'}
           </Text>
         </View>
+
+        <Text style={styles.access}>
+          HYDRA est une app par abonnement : l'accès complet (barre en temps
+          réel, widgets, historique) nécessite l'abonnement HYDRA Pro.
+        </Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -100,7 +139,9 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
           {busy ? (
             <ActivityIndicator color={C.bg} />
           ) : (
-            <Text style={styles.ctaTxt}>COMMENCER L'ESSAI GRATUIT</Text>
+            <Text style={styles.ctaTxt}>
+              {trialLabel ? "COMMENCER L'ESSAI GRATUIT" : "S'ABONNER"}
+            </Text>
           )}
         </Pressable>
 
@@ -115,8 +156,9 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
         ) : null}
 
         <Text style={styles.legal}>
-          L'essai gratuit dure 7 jours. Sans annulation au moins 24 h avant la
-          fin, l'abonnement se renouvelle automatiquement à {priceLabel}/mois.
+          {trialLabel
+            ? `Essai gratuit de ${trialLabel.toLowerCase()}. Sans annulation au moins 24 h avant la fin, l'abonnement se renouvelle automatiquement à ${priceLabel}/mois. `
+            : `Abonnement mensuel à ${priceLabel}, renouvelé automatiquement sauf annulation au moins 24 h avant la fin de la période. `}
           Gère ou annule l'abonnement dans les réglages de ton compte Apple.
         </Text>
 
@@ -127,6 +169,11 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
           <Text style={styles.linkSep}>·</Text>
           <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={8}>
             <Text style={styles.link}>Confidentialité</Text>
+          </Pressable>
+          <Text style={styles.linkSep}>·</Text>
+          {/* Citations must be reachable without subscribing (guideline 1.4.1). */}
+          <Pressable onPress={() => setSourcesOpen(true)} hitSlop={8}>
+            <Text style={styles.link}>Sources</Text>
           </Pressable>
           {/* Only meaningful once an account exists — during the funnel the user
               reaches the paywall before signing in. */}
@@ -140,6 +187,11 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
           ) : null}
         </View>
       </ScrollView>
+
+      <SourcesSheet
+        visible={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -198,6 +250,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 12,
     marginTop: 6,
+  },
+  // Spells out that the app is subscription-gated (guideline 2.3.2).
+  access: {
+    color: C.textDim,
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    lineHeight: 16,
+    textAlign: 'center',
+    marginBottom: 16,
   },
   error: { color: C.red, fontFamily: FONTS.mono, fontSize: 12, marginBottom: 10 },
   cta: {

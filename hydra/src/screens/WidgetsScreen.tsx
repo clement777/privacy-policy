@@ -24,6 +24,7 @@ import { useHydration } from '../store/useHydration';
 import { ensurePermissions } from '../notifications/scheduler';
 import { LockWidget, MediumWidget, SmallWidget } from '../components/WidgetMocks';
 import { WidgetAddGuide, GuideTarget } from '../components/WidgetAddGuide';
+import { SourcesSheet } from '../components/SourcesSheet';
 import { WATER_CONTAINERS, WidgetFormat } from '../store/widgetSettings';
 
 type PreviewMode = 'live' | Zone;
@@ -110,6 +111,7 @@ export function WidgetsScreen() {
   const { user, signOut, deleteAccount } = useAuth();
   const [mode, setMode] = useState<PreviewMode>('live');
   const [guide, setGuide] = useState<GuideTarget | null>(null);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   // Traité comme activé tant qu'il n'est pas explicitement désactivé — même
   // repli que scheduler.ts pour rester compatible avec les profils existants.
   const glassRemindersOn = widget.glassRemindersEnabled !== false;
@@ -408,6 +410,13 @@ export function WidgetsScreen() {
           <Text style={styles.acctDangerTxt}>SUPPRIMER LE COMPTE</Text>
         </Pressable>
 
+        {/* ————— SCIENCE ————— */}
+        <Text style={styles.section}>SCIENCE</Text>
+        <Pressable style={styles.action} onPress={() => setSourcesOpen(true)}>
+          <Text style={styles.actionTxt}>SOURCES SCIENTIFIQUES</Text>
+          <Text style={styles.actionArrow}>›</Text>
+        </Pressable>
+
         <Text style={styles.disclaimer}>
           App grand public à but ludique et informatif. Ce n'est pas un
           dispositif médical. Les coefficients sont des moyennes de population.
@@ -421,6 +430,10 @@ export function WidgetsScreen() {
         target={guide ?? 'lock'}
         state={state}
         onClose={() => setGuide(null)}
+      />
+      <SourcesSheet
+        visible={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
       />
     </SafeAreaView>
   );

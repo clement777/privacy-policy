@@ -86,6 +86,32 @@ export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
             </Text>
           </View>
 
+          {/* An explicit two-way switch, not just the footer link. App Review
+              reported "no action took place" after tapping "Déjà un compte ?
+              Se connecter": that link only flipped the tagline and the submit
+              label, which on a large screen reads as nothing having happened.
+              The selected tab makes the current mode unambiguous. */}
+          <View style={styles.modes}>
+            {(['signIn', 'signUp'] as const).map((m) => (
+              <Pressable
+                key={m}
+                style={[styles.modeTab, mode === m && styles.modeTabOn]}
+                onPress={() => {
+                  setMode(m);
+                  setError(null);
+                  setInfo(null);
+                }}
+                disabled={busy}
+              >
+                <Text
+                  style={[styles.modeTxt, mode === m && styles.modeTxtOn]}
+                >
+                  {m === 'signIn' ? 'SE CONNECTER' : 'CRÉER UN COMPTE'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           {appleAvailable ? (
             <>
               <AppleAuthentication.AppleAuthenticationButton
@@ -145,20 +171,13 @@ export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
             )}
           </Pressable>
 
-          <Pressable
-            onPress={() => {
-              setMode(mode === 'signIn' ? 'signUp' : 'signIn');
-              setError(null);
-              setInfo(null);
-            }}
-            hitSlop={10}
-          >
-            <Text style={styles.toggle}>
-              {mode === 'signIn'
-                ? "Pas encore de compte ? Créer un compte"
-                : 'Déjà un compte ? Se connecter'}
-            </Text>
-          </Pressable>
+          {/* Replaces the old footer toggle, which duplicated the switch above
+              and was the element App Review found unresponsive. */}
+          <Text style={styles.toggle}>
+            {mode === 'signIn'
+              ? 'Pas encore de compte ? Choisis CRÉER UN COMPTE en haut.'
+              : 'Déjà un compte ? Choisis SE CONNECTER en haut.'}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -184,6 +203,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
+  modes: {
+    flexDirection: 'row',
+    backgroundColor: C.bgSoft,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.segmentEmpty,
+    padding: 4,
+    gap: 4,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: RADIUS.sm,
+    alignItems: 'center',
+  },
+  modeTabOn: { backgroundColor: C.segmentFull },
+  modeTxt: {
+    color: C.textDim,
+    fontFamily: FONTS.label,
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+  modeTxtOn: { color: C.bg },
   appleBtn: { height: 50, width: '100%' },
   divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 6 },
   line: { flex: 1, height: 1, backgroundColor: C.segmentEmpty },
