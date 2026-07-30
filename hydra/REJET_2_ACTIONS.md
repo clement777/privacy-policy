@@ -62,7 +62,7 @@ non ambigu.
 
 ---
 
-## 3. Guideline 2.1(b) — l'essai de 7 jours n'apparaît pas dans la feuille de paiement ⚠️ À FAIRE DANS APP STORE CONNECT
+## 3. Guideline 2.1(b) — l'essai de 7 jours n'apparaît pas dans la feuille de paiement ✅ RÉGLÉ le 30/07
 
 > Specifically, the 7 day trial is not reflected in the payment sheet.
 
@@ -71,7 +71,15 @@ StoreKit n'a rien à afficher : **aucune offre introductive n'est configurée** 
 l'abonnement `com.shipply.hydraapp.monthly`. La feuille de paiement ne montre que
 ce qui existe dans App Store Connect.
 
-### À faire (obligatoire)
+### ✅ Fait — offre créée le 30/07/2026
+
+Vérifié dans App Store Connect : la colonne *Offres d'introduction (175)* affiche
+« Gratuit la première semaine » pour les 175 pays, et les prix de base sont en
+place (3,99 € en zone euro). L'app affichera donc « 7 JOURS GRATUITS » et
+« COMMENCER L'ESSAI GRATUIT », le texte étant dérivé de `product.introPrice`.
+
+<details>
+<summary>Chemin suivi, pour mémoire (les libellés FR sont trompeurs)</summary>
 
 Le libellé FR est **« Offres d'introduction »** (traduction de *Introductory
 Offers*) — pas « Offres introductives », et ce n'est pas une section de la page
@@ -109,6 +117,8 @@ Prérequis et pièges :
   suffit pas : voir l'ordre de resoumission plus bas, les trois éléments doivent
   repartir ensemble.
 
+</details>
+
 ### Côté code, en filet de sécurité ✅ fait
 
 Le paywall ne promet plus jamais un essai que StoreKit n'a pas : le texte est
@@ -116,8 +126,9 @@ maintenant **dérivé de `product.introPrice`**. S'il n'y a pas d'offre gratuite
 configurée, l'écran affiche le prix mensuel et le bouton devient `S'ABONNER` au
 lieu de `COMMENCER L'ESSAI GRATUIT`. Impossible de refaire le même écart.
 
-Donc : si tu oublies l'étape 1-4, l'app passera la review mais **sans essai
-gratuit**. Si tu la fais, l'essai réapparaît partout automatiquement.
+L'offre étant maintenant configurée, l'essai s'affiche automatiquement — et si
+elle venait à expirer ou être supprimée, l'app basculerait d'elle-même sur le
+prix mensuel sans nouveau build.
 
 ---
 
