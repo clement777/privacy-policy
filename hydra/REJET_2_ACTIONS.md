@@ -141,22 +141,62 @@ La description ne dit nulle part que l'app nécessite un abonnement payant.
 **Fait côté app :** le paywall affiche désormais explicitement « HYDRA est une app
 par abonnement : l'accès complet nécessite l'abonnement HYDRA Pro ».
 
-**À faire :** coller ce bloc **à la fin** du champ *Description* (App Store
-Connect → Version 1.0 → Description), avant de resoumettre.
+**À faire :** remplacer l'intégralité du champ *Description* (App Store Connect
+→ Version 1.0 → Description) par le texte ci-dessous. Il corrige aussi deux
+défauts de la description précédente : elle affirmait que boire « un verre »
+faisait remonter la barre, juste avant d'expliquer que l'alcool la fait chuter
+(contradiction sur le mécanisme central, risque 2.3.2 à elle seule), et les liens
+EULA / confidentialité y figuraient en double.
 
 ```
+Ta vie n'est pas une jauge d'énergie infinie. HYDRA la transforme en barre
+de vie, comme dans un jeu — et chaque verre d'eau, chaque café, chaque verre
+d'alcool la fait monter ou descendre en direct.
+
+Abonnement requis (7 jours d'essai gratuit, puis 3,99 €/mois).
+
+COMMENT ÇA MARCHE
+• Une barre de vie sur ton écran d'accueil et ton écran verrouillé (widget
+  natif iOS), qui se vide toute seule selon ta physiologie réelle.
+• Bois de l'eau ou un café : la barre remonte instantanément.
+• L'alcool — le "poison" — la fait chuter plus vite qu'elle ne remonte.
+• Le calcul prend en compte ton poids, ton sommeil et ton environnement
+  (température, humidité, altitude) pour un besoin d'hydratation qui te
+  correspond vraiment, pas une règle générique "2 litres par jour".
+
+POURQUOI C'EST DIFFÉRENT
+La plupart des apps d'hydratation te demandent de cocher des cases. HYDRA
+transforme l'hydratation en un jeu simple à lire d'un coup d'œil : ta barre
+de vie. Pas de graphiques à interpréter, pas de calculs à faire — juste une
+couleur (vert, ambre, rouge) qui te dit où tu en es, là, maintenant.
+
+RAPPELS INTELLIGENTS
+Reçois une alerte avant que ta barre passe en zone ambre ou rouge, et des
+rappels étalés dans la journée pour le nombre de verres qu'il te reste à
+boire avant ton coucher — jamais après, jamais du bruit inutile.
+
+CONFIDENTIALITÉ
+Tes données (poids, journal de boissons) ne servent qu'à faire fonctionner
+l'app. Aucune publicité, aucune revente de données, aucun tracker tiers.
+Suppression de compte en un geste, directement dans l'app.
+
+HYDRA fait référence à la consommation d'alcool à des fins de suivi
+personnel et n'encourage pas sa consommation.
+
 ABONNEMENT REQUIS
 
 HYDRA est une application par abonnement. L'accès aux fonctionnalités
 (barre d'hydratation en temps réel, widgets écran verrouillé et écran
 d'accueil, historique et statistiques) nécessite l'abonnement HYDRA Pro.
 
-• HYDRA Pro — 3,99 €/mois, après 7 jours d'essai gratuit
+• HYDRA Pro — abonnement mensuel à 3,99 €, après 7 jours d'essai gratuit
 • L'abonnement se renouvelle automatiquement sauf annulation au moins
   24 h avant la fin de la période en cours
 • Gestion et annulation à tout moment dans les réglages de ton compte Apple
-• Conditions d'utilisation : https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
-• Politique de confidentialité : https://hydra-landing-sooty.vercel.app/privacy.html
+• Conditions d'utilisation (EULA) :
+  https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+• Politique de confidentialité :
+  https://hydra-landing-sooty.vercel.app/privacy.html
 
 HYDRA n'est pas un dispositif médical et ne fournit aucun diagnostic. Les
 calculs reposent sur des coefficients physiologiques publiés, dont les
@@ -164,8 +204,10 @@ sources sont citées dans l'app (WIDGETS → SCIENCE → SOURCES SCIENTIFIQUES).
 Consulte un professionnel de santé pour tout besoin d'hydratation spécifique.
 ```
 
-> Si tu ne configures **pas** l'essai gratuit (point 3), retire la mention
-> « après 7 jours d'essai gratuit » de ce texte — sinon c'est un nouveau 2.3.2.
+~2 300 caractères (limite : 4 000).
+
+> Vérifier que « aucun tracker tiers » reste cohérent avec la section
+> **Confidentialité des apps** déclarée dans App Store Connect.
 
 ---
 
