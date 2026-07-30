@@ -194,11 +194,12 @@ export function OnboardingScreen({
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => {}
     );
-    // Show a short "we're computing your plan" screen for a personalised feel,
-    // THEN persist (completeOnboarding flips `onboarded` → the app moves on to
-    // the paywall). Keep the delay in step with the cycling messages below.
+    // Show the "we're computing your plan" screen for a personalised feel, THEN
+    // persist (completeOnboarding flips `onboarded` → the app moves on to the
+    // paywall). The duration comes from the message list itself, so the screen
+    // never cuts off mid-sequence.
     setPreparing(true);
-    await new Promise((r) => setTimeout(r, 2700));
+    await new Promise((r) => setTimeout(r, PREP_TOTAL_MS));
     const water =
       customMode && Number(customMl) >= CUSTOM_MIN
         ? clampMl(Number(customMl))
@@ -625,17 +626,29 @@ export function OnboardingScreen({
 // onboarding step and the paywall. Cycles a few reassuring lines while the
 // answers are saved, so the paywall feels earned rather than abrupt.
 const PREP_MSGS = [
+  'On calcule ton besoin quotidien à partir de ton poids…',
+  'On ajuste selon ta fenêtre de sommeil…',
+  'On intègre ta température et ton humidité ambiantes…',
   'On prépare ta répartition de consommation d’eau dans la journée…',
   'On cale ta barre de vie sur ton rythme de sommeil…',
+  'On règle ton plafond d’absorption horaire…',
+  'On paramètre l’impact de l’alcool sur ta barre…',
   'On calibre tes rappels par verre…',
+  'Ton profil est prêt.',
 ] as const;
+
+const PREP_STEP_MS = 850;
+// Derived, not hand-written: the screen used to hold for a hard-coded 2 700 ms
+// that had to be kept in step with the message list by hand. Now adding or
+// removing a line adjusts the duration on its own.
+export const PREP_TOTAL_MS = PREP_MSGS.length * PREP_STEP_MS;
 
 function PreparingView({ need }: { need: number }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     const id = setInterval(
       () => setIdx((i) => Math.min(PREP_MSGS.length - 1, i + 1)),
-      850
+      PREP_STEP_MS
     );
     return () => clearInterval(id);
   }, []);

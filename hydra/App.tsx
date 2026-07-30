@@ -60,11 +60,6 @@ function Splash({ note }: { note?: string } = {}) {
   );
 }
 
-// Extra dwell before the paywall. It also covers the RevenueCat offering: the
-// paywall derives its copy from product.introPrice, so painting it before the
-// offering lands would show the fallback price and "S'ABONNER" for a beat,
-// then flip to "7 JOURS GRATUITS" — the exact mismatch guideline 2.1(b) is about.
-const PAYWALL_HOLD_MS = 5000;
 
 export default function App() {
   const [fontsLoaded] = useFonts({
@@ -112,17 +107,6 @@ export default function App() {
     return () => clearTimeout(id);
   }, [authStatus, onboarded]);
 
-  // Hold the splash a few seconds once we know the paywall is what comes next.
-  const [paywallHeld, setPaywallHeld] = useState(false);
-  useEffect(() => {
-    if (subStatus !== 'inactive') {
-      setPaywallHeld(false);
-      return;
-    }
-    setPaywallHeld(true);
-    const id = setTimeout(() => setPaywallHeld(false), PAYWALL_HOLD_MS);
-    return () => clearTimeout(id);
-  }, [subStatus]);
 
   useEffect(() => {
     ensurePermissions().catch(() => {});
@@ -172,7 +156,7 @@ export default function App() {
   // Just signed in, cloud profile not merged yet — hold rather than flash the
   // questionnaire at someone who already finished it. Self-releases after 5 s.
   if (awaitingSync) {
-    return <Splash />;
+    return <Splash note="Récupération de ton profil…" />;
   }
 
   // Returning user / reviewer: jump to sign-in even before the questionnaire
@@ -245,9 +229,6 @@ export default function App() {
   // 3) No active subscription/trial → hard paywall (no free access). Signed-out
   //    users get a shortcut to sign in (for an existing account).
   if (subStatus === 'inactive') {
-    if (paywallHeld) {
-      return <Splash note="Préparation de ton profil…" />;
-    }
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
