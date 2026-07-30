@@ -73,28 +73,37 @@ ce qui existe dans App Store Connect.
 
 ### À faire (obligatoire)
 
-Il n'y a **pas** de section « Offres introductives » sur la page de l'abonnement :
-l'offre se crée à l'intérieur du bloc *Prix de l'abonnement*.
+Le libellé FR est **« Offres d'introduction »** (traduction de *Introductory
+Offers*) — pas « Offres introductives », et ce n'est pas une section de la page
+de l'abonnement mais un **onglet d'une page séparée**.
 
 1. App Store Connect → **Abonnements** → groupe **HYDRA Pro** → **HYDRA Pro Mensuel**
 2. Bloc **Prix de l'abonnement** → lien **« Prix et conceptions »** en haut à droite
-   (traduction FR ratée de *Pricing and Offers* / *View all subscription pricing*)
-3. **« Configurer une offre introductive »** (*Set up Introductory Offer*)
-4. Assistant en 5 étapes :
-   - Pays/régions : **tous** → Suivant
-   - Date de début : aujourd'hui · Date de fin : **vide** → Suivant
-   - Type d'offre : **Essai gratuit** (*Free Trial*)
+3. On arrive sur la page **« Tarification de l'abonnement »**, qui a 5 onglets :
+   `Prix de l'abonnement` · **`Offres d'introduction`** · `Offres de reconquête` ·
+   `Codes d'offre` · `Offres promotionnelles`
+4. Onglet **« Offres d'introduction »** → configurer :
+   - Type : **Essai gratuit**
    - Durée : **1 semaine** — il n'existe pas d'option « 7 jours ». Les durées
      proposées sont 3 jours, 1–2 semaines, 1–6 mois, 1 an.
-   - **Confirmer**
+   - Pays/régions : **tous**
+   - Date de fin : **aucune**
 
-Pièges :
+⚠️ **Ne pas confondre avec « Offres promotionnelles »** (dernier onglet) : celles-ci
+ciblent les abonnés existants ou résiliés et se déclenchent par un jeton signé
+côté serveur. Elles n'apparaissent pas dans la feuille de paiement d'un nouvel
+utilisateur et ne corrigeraient donc pas le motif 2.1(b).
 
+Prérequis et pièges :
+
+- **Un prix de base doit exister.** Onglet `Prix de l'abonnement` → la France doit
+  être à 3,99 €. Une offre d'introduction est un rabais sur un prix : sans prix,
+  l'option ne s'affiche pas.
 - **Non modifiable après création.** Pour changer l'offre il faut la supprimer et
   en recréer une. Vérifier type + durée + pays avant de confirmer.
 - **Jusqu'à 1 h de propagation vers le sandbox.** Si l'essai n'apparaît pas tout
   de suite dans la feuille de paiement, attendre avant de conclure à un bug.
-- Une personne ne peut consommer qu'**une seule** offre introductive par groupe
+- Une personne ne peut consommer qu'**une seule** offre d'introduction par groupe
   d'abonnements — un compte de test déjà utilisé ne reverra pas l'essai.
 - Le bouton **« Mettre à jour la vérification »** de la page de l'abonnement ne
   suffit pas : voir l'ordre de resoumission plus bas, les trois éléments doivent
