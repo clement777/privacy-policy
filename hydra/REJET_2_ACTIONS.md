@@ -36,29 +36,46 @@ population, consulter un professionnel de santé si besoin spécifique.
 
 ---
 
-## 2. Guideline 2.1(a) — App Completeness ✅ corrigé dans le code
+## 2. Guideline 2.1(a) — App Completeness ✅ corrigé, vérifié en TestFlight
 
 > no action took place when we tapped on Déjà un compte ? Se connecter.
 
-Ce libellé existait à **trois** endroits. Les deux premiers (écran d'accueil du
-questionnaire, paywall) naviguent bien. Le troisième — le lien en bas de l'écran
-de compte — ne faisait que basculer un état interne : le texte d'accroche et le
-libellé du bouton changeaient, **rien d'autre**. Sur un grand écran d'iPad, avec
-les deux mêmes champs email/mot de passe qui dominent, ça se lit exactement comme
-« rien ne s'est passé ». C'est là que le vérificateur a tapé : il arrive sur cet
-écran en mode « créer un compte » juste après le questionnaire, et il cherchait à
-se connecter avec le compte de test fourni.
+**La cause n'était pas celle diagnostiquée en premier.** J'avais attribué le
+blocage au lien de bas de page de `AuthScreen`, qui ne changeait qu'une phrase
+et un libellé de bouton — remplacé par un sélecteur à deux onglets. C'était une
+amélioration réelle, mais **le bug a survécu à cette correction** : reproduit sur
+le build 6 en TestFlight, install neuve, connexion Apple.
 
-**Fait :** le lien discret est remplacé par un **sélecteur à deux onglets**
-en haut du formulaire — `SE CONNECTER` / `CRÉER UN COMPTE` — dont l'onglet actif
-est surligné en vert. N'importe quel appui produit désormais un changement visuel
-non ambigu.
+Le vrai coupable est le routage dans `App.tsx` :
 
-> ⚠️ Je n'ai pas pu reproduire sur un iPad ici. Le diagnostic ci-dessus est le
-> seul chemin où l'appui ne produisait effectivement aucun changement visible ;
-> les deux autres liens sont fonctionnels et testés. **Avant de resoumettre,
-> vérifie ce parcours dans le simulateur iPad Air 11" :** installation neuve →
-> questionnaire → paywall → essai → écran de compte → appuie sur `SE CONNECTER`.
+```js
+if (authStatus === 'signedOut' && wantsSignIn)  -> AuthScreen
+if (!onboarded || reconfiguring)                -> OnboardingScreen
+```
+
+Une connexion réussie fait passer `authStatus` à `signedIn`, donc la première
+branche cesse de matcher — pendant que `onboarded` est encore `false` (un Apple ID
+neuf n'a aucun profil cloud). Le questionnaire reprend la main, son lien « Déjà un
+compte ? » reste affiché, et le taper repositionne un drapeau **déjà** à `true` :
+React ne re-rend rien, et la branche visée est devenue inatteignable. Bouton mort
+définitivement — exactement le rapport d'Apple, deux fois de suite.
+
+**Corrections :**
+
+- `wantsSignIn` est remis à zéro dès que l'auth quitte l'état déconnecté, pour que
+  le drapeau et la branche qui le garde ne puissent plus diverger
+- `onHaveAccount` n'est passé que si l'utilisateur est réellement déconnecté : un
+  raccourci de connexion offert à quelqu'un de déjà connecté n'a nulle part où
+  aller, par construction
+- Attente bornée à 5 s sur le splash quand on est connecté sans `onboarded` : ce
+  qui fait basculer ce drapeau pour un utilisateur existant, c'est la première
+  remontée cloud, qui arrive juste après l'auth
+- Sortie **« Utiliser un autre compte »** sur le questionnaire quand le compte
+  connecté n'a pas de profil HYDRA — plus aucun cul-de-sac
+
+**Leçon pour la suite :** le bug a été trouvé par un test manuel sur TestFlight,
+pas par lecture du code. Refaire le parcours complet sur installation neuve avant
+chaque soumission.
 
 ---
 
