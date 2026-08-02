@@ -879,6 +879,48 @@ async function doSignup() {
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════════════
+     ATTRIBUTION PAR CRÉA
+
+     Toutes les publicités pointent vers cette page, donc sans relais elles
+     partageraient un seul lien App Store et on ne saurait jamais laquelle a
+     fait télécharger. Meta (Paramètres de l'URL : `c={{ad.name}}`) et TikTok
+     ajoutent le nom de la publicité en `?c=` ; on le reporte ici dans le lien
+     App Store comme jeton `ct`, qu'App Store Connect remonte ensuite dans
+     Analyses > Liens de campagne, téléchargement par téléchargement.
+
+     ⚠️ PROVIDER_TOKEN doit être renseigné : sans `pt`, Apple ignore le `ct`
+     et ne comptabilise rien. On le récupère une seule fois dans App Store
+     Connect > Analyses > Liens de campagne (c'est le `pt=` de l'URL générée).
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  var PROVIDER_TOKEN = '';   // ← coller ici le pt= d'App Store Connect
+
+  var link = document.getElementById('ctaStore');
+  if (!link || !PROVIDER_TOKEN) return;
+
+  var raw = new URLSearchParams(location.search).get('c');
+  if (!raw) return;
+
+  // Les noms de publicité contiennent des espaces et des accents ; Apple
+  // n'accepte qu'un jeton court et alphanumérique.
+  var ct = raw.normalize('NFD').replace(/[̀-ͯ]/g, '')
+              .replace(/[^A-Za-z0-9]+/g, '_')
+              .replace(/^_+|_+$/g, '')
+              .slice(0, 40);
+  if (!ct) return;
+
+  try {
+    var url = new URL(link.href);
+    url.searchParams.set('pt', PROVIDER_TOKEN);
+    url.searchParams.set('ct', ct);
+    url.searchParams.set('mt', '8');
+    link.href = url.toString();
+  } catch (e) { /* lien laissé intact : mieux vaut perdre la mesure que le clic */ }
+})();
+</script>
+
 <!-- Vercel Web Analytics (site statique) : le script est servi par Vercel
      quand Web Analytics est activé dans les réglages du projet. -->
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments);};</script>
