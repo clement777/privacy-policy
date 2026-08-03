@@ -19,13 +19,27 @@ type Mode = 'signIn' | 'signUp';
 
 interface Props {
   // Reached at the funnel's end → default to sign-up. Opened from the paywall's
-  // "Déjà un compte ?" link → 'signIn'. Returning users can still toggle.
+  // "Déjà un compte ?" link → 'signIn'.
   initialMode?: Mode;
   // When there's a paywall behind (user came from it), a way back to it.
   onBack?: () => void;
+  // Whether creating an account is a legitimate outcome on this screen.
+  //
+  // It is not, when the user arrived through the "Déjà un compte ?" detour: in
+  // this funnel the account is created AFTER the trial starts, so signing up
+  // here produces an account with no subscription — and the router then sends
+  // the user straight back to the paywall. Two of the three people who finished
+  // the questionnaire on 3 Aug fell into exactly that loop, created an account,
+  // and left without ever starting a trial. Someone who followed a link saying
+  // "already have an account" has one; offering them sign-up is a dead end.
+  allowSignUp?: boolean;
 }
 
-export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
+export function AuthScreen({
+  initialMode = 'signUp',
+  onBack,
+  allowSignUp = true,
+}: Props = {}) {
   const { appleAvailable, signInWithApple, signInWithEmail, signUpWithEmail } =
     useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -91,6 +105,7 @@ export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
               Se connecter": that link only flipped the tagline and the submit
               label, which on a large screen reads as nothing having happened.
               The selected tab makes the current mode unambiguous. */}
+          {allowSignUp ? (
           <View style={styles.modes}>
             {(['signIn', 'signUp'] as const).map((m) => (
               <Pressable
@@ -111,6 +126,7 @@ export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
               </Pressable>
             ))}
           </View>
+          ) : null}
 
           {appleAvailable ? (
             <>
@@ -174,7 +190,9 @@ export function AuthScreen({ initialMode = 'signUp', onBack }: Props = {}) {
           {/* Replaces the old footer toggle, which duplicated the switch above
               and was the element App Review found unresponsive. */}
           <Text style={styles.toggle}>
-            {mode === 'signIn'
+            {!allowSignUp
+              ? 'Pas encore de compte ? Reviens en arrière : ton compte se crée une fois l’essai démarré.'
+              : mode === 'signIn'
               ? 'Pas encore de compte ? Choisis CRÉER UN COMPTE en haut.'
               : 'Déjà un compte ? Choisis SE CONNECTER en haut.'}
           </Text>

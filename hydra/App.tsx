@@ -166,8 +166,12 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <StatusBar style="light" />
+          {/* Sign-in only: this screen is reached from a "Déjà un compte ?"
+              link, and signing UP here creates an account with no subscription
+              — the router then bounces the user back to the paywall. */}
           <AuthScreen
             initialMode="signIn"
+            allowSignUp={false}
             onBack={() => setWantsSignIn(false)}
           />
         </SafeAreaProvider>

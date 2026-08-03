@@ -27,7 +27,7 @@
           "group.com.shipply.hydraapp"
         ]
       },
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "plugins": [
       "expo-font",

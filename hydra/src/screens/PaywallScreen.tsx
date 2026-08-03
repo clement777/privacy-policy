@@ -124,6 +124,17 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
           </Text>
         </View>
 
+        {/* A signed-in user on the paywall has an account but no subscription.
+            Without a word of explanation the screen just reappears and reads as
+            a loop — which is how two of the three people who completed the
+            questionnaire on 3 Aug left, account created, trial never started. */}
+        {authStatus === 'signedIn' ? (
+          <Text style={styles.accountNote}>
+            Ton compte est bien créé. Il te reste à démarrer ton essai pour
+            débloquer l'app.
+          </Text>
+        ) : null}
+
         <Text style={styles.access}>
           HYDRA est une app par abonnement : l'accès complet (barre en temps
           réel, widgets, historique) nécessite l'abonnement HYDRA Pro.
@@ -250,6 +261,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 12,
     marginTop: 6,
+  },
+  accountNote: {
+    color: C.segmentFull,
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    marginBottom: 12,
   },
   // Spells out that the app is subscription-gated (guideline 2.3.2).
   access: {
