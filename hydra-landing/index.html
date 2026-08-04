@@ -21,7 +21,10 @@
   }
   *{margin:0;padding:0;box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;line-height:1.6;overflow-x:hidden}
+  /* Fond clair : une page sombre inconnue, ouverte depuis un réseau social,
+     se lit comme un site tiers. Le blanc système est ce que les gens associent
+     à l'App Store. La marque sombre reprend la main dès l'app installée. */
+  body{background:#fff;color:#1d1d1f;font-family:'IBM Plex Mono',monospace;line-height:1.6;overflow-x:hidden}
   h1,h2,h3,.btn{font-family:'Chakra Petch',sans-serif;letter-spacing:.08em;text-transform:uppercase}
   section{max-width:960px;margin:0 auto;padding:72px 24px}
   a{color:var(--green)}
@@ -41,12 +44,39 @@
   .btn.solid:hover{background:var(--green-deep)}
   /* Bouton App Store : c'est la destination des campagnes payantes, il doit
      rester la première chose lisible au-dessus de la ligne de flottaison. */
-  .btn.store{display:inline-flex;align-items:center;gap:10px;padding:20px 40px;font-size:16px}
-  .btn.store svg{width:19px;height:19px;flex:none;margin-top:-2px}
-  /* Une seule action sur la page : le bouton occupe le centre de l'écran,
-     rien en dessous ne doit inviter à scroller plutôt qu'à cliquer. */
-  .hero{min-height:100vh}
-  .hero-note{color:var(--dim);font-size:12.5px;margin-top:22px;letter-spacing:.02em}
+  /* ——— Page de redirection ———
+     Police système : sur iPhone, `-apple-system` rend le vrai SF Pro, la même
+     police que l'App Store. C'est le signal de confiance le moins coûteux et
+     le plus efficace — la page a l'air d'appartenir au système, pas au web. */
+  .bridge{
+    min-height:100svh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;gap:0;padding:32px 24px;
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
+  }
+  /* Rayon 22,37 % : la « squircle » d'Apple. Un carré arrondi standard se
+     repère au premier coup d'œil comme n'étant pas une icône iOS. */
+  .bridge-icon{width:120px;height:120px;border-radius:22.37%;
+    box-shadow:0 8px 28px rgba(0,0,0,.16);display:block}
+  .bridge-name{font-family:inherit;font-size:26px;font-weight:700;letter-spacing:-.02em;
+    text-transform:none;color:#1d1d1f;margin-top:22px}
+  .bridge-sub{font-size:16px;color:#6e6e73;margin-top:6px;line-height:1.35}
+  .bridge-meta{font-size:12.5px;color:#a1a1a6;margin-top:14px;letter-spacing:.01em}
+  /* Bleu système iOS et pilule pleine : la forme exacte du bouton d'action
+     de l'App Store, reconnue sans être lue. */
+  .bridge-btn{
+    display:inline-block;margin-top:34px;padding:15px 54px;border-radius:999px;
+    background:#007AFF;color:#fff;font-size:17px;font-weight:600;letter-spacing:0;
+    text-decoration:none;text-transform:none;font-family:inherit;
+    -webkit-tap-highlight-color:transparent;transition:background .15s;
+  }
+  .bridge-btn:active{background:#0062cc}
+  .bridge-note{font-size:13px;color:#a1a1a6;margin-top:16px}
+  .bridge-footer{
+    position:fixed;left:0;right:0;bottom:0;padding:18px;text-align:center;
+    font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+    font-size:12px;color:#c7c7cc;border:0;
+  }
+  .bridge-footer a{color:#a1a1a6;text-decoration:none;margin:0 6px}
 
   /* ===== MOCKUP iPHONE (démo interactive) ===== */
   .mock{--line:#1a1f28;--panel:#0B0D11;--panel-2:#121620;
@@ -233,24 +263,36 @@
 </head>
 <body>
 
-<!-- ============ HERO ============ -->
-<section class="hero">
-  <img class="logo" src="logo.svg" alt="HYDRA" width="88" height="95">
-  <div class="brand">HYDRA</div>
-  <h1>Ton corps a une<br><span class="g">barre de vie.</span></h1>
-  <p class="sub">Un widget sur ton écran verrouillé. Elle se vide en continu.
-  Tu bois → elle remonte.</p>
-  <div class="cta-row">
-    <!-- Destination des campagnes Meta / TikTok. Remplacer par le lien de
-         campagne généré dans App Store Connect (Analyses > Liens de campagne),
-         qui ajoute ?pt=...&ct=...&mt=8 — c'est ce qui permet de savoir quelle
-         créa a fait télécharger. Un `ct` différent par publicité. -->
-    <a href="https://apps.apple.com/fr/app/hydra-io/id6790794354" class="btn solid store" id="ctaStore">
-      <svg viewBox="0 0 384 512" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
-      Télécharger sur l'App Store
-    </a>
-  </div>
-  <p class="hero-note">iOS 17+ · 7 jours d'essai gratuit, puis 3,99 €/mois</p>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PAGE DE REDIRECTION
+
+     Le 3 août, 415 visiteurs venus de la publicité n'ont produit que ~29 vues
+     de fiche App Store : 93 % repartaient sans cliquer. Une page qui argumente
+     donne au visiteur autant de raisons de réfléchir que de continuer, et sur
+     un lien inconnu ouvert depuis un réseau social, réfléchir veut dire partir.
+
+     D'où ce parti pris : ne rien vendre ici. Reprendre les codes visuels d'une
+     fiche App Store — icône réelle de l'app, police système (SF Pro sur iOS),
+     bleu iOS, fond clair — pour que la page se lise en une seconde comme une
+     étape officielle vers l'App Store, et non comme une page inconnue.
+     Tout l'argumentaire vit sur la fiche App Store, qui convertit déjà à 27 %.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section class="bridge">
+  <img class="bridge-icon" src="app-icon.png" alt="" width="120" height="120">
+  <h1 class="bridge-name">HYDRA.IO</h1>
+  <p class="bridge-sub">Ta barre de vie s’hydrate</p>
+  <p class="bridge-meta">Forme et santé · iPhone</p>
+
+  <!-- Destination des campagnes. Remplacer par le lien de campagne généré dans
+       App Store Connect (Analyses > Liens de campagne), qui ajoute
+       ?pt=...&ct=...&mt=8 — c'est ce qui permet de savoir quelle créa convertit. -->
+  <a href="https://apps.apple.com/fr/app/hydra-io/id6790794354" class="bridge-btn" id="ctaStore">
+    Voir l’application
+  </a>
+
+  <!-- Dire où mène le bouton : « Télécharger » laissait croire que le
+       téléchargement se déclenchait ici, ce qui fait hésiter. -->
+  <p class="bridge-note">Tu seras redirigé vers l’App Store</p>
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════════
@@ -410,7 +452,15 @@
 
 </div><!-- /#pageComplete -->
 
-<footer>
+<!-- Réduit à deux liens légaux : ils rassurent (une page d'arnaque n'en a pas)
+     sans donner de raison de rester. -->
+<footer class="bridge-footer">
+  <a href="/privacy.html">Confidentialité</a>
+  <span>·</span>
+  <a href="/support.html">Support</a>
+</footer>
+
+<footer hidden>
   <div class="fbrand">HYDRA</div>
   <p>iOS uniquement au lancement. Aucune donnée revendue, aucun tracker tiers.</p>
 </footer>
