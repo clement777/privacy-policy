@@ -980,13 +980,18 @@ async function doSignup() {
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function () {
-  var PROVIDER_TOKEN = '';   // ← coller ici le pt= d'App Store Connect
+  // Jeton fournisseur Apple, identique pour tous les liens de campagne du
+  // compte. Récupéré dans App Store Connect > Analyses > Liens de campagne.
+  var PROVIDER_TOKEN = '128511052';
 
   var link = document.getElementById('ctaStore');
   if (!link || !PROVIDER_TOKEN) return;
 
-  var raw = new URLSearchParams(location.search).get('c');
-  if (!raw) return;
+  // Sans `?c=`, on retombe sur un jeton fixe plutôt que de ne rien mesurer :
+  // Apple regroupe alors tout le trafic issu de la landing sous une seule
+  // campagne, ce qui reste la comparaison qui nous intéresse (avec landing
+  // contre lien App Store direct).
+  var raw = new URLSearchParams(location.search).get('c') || 'landing';
 
   // Les noms de publicité contiennent des espaces et des accents ; Apple
   // n'accepte qu'un jeton court et alphanumérique.
