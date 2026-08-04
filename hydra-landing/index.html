@@ -9,6 +9,41 @@
 <meta property="og:description" content="Widget iOS lock screen. La barre se vide. Tu bois, elle remonte. Tu bois de l'alcool, poison ×3.">
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="apple-touch-icon" href="logo.svg">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     POSTHOG — comportement réel sur la page
+
+     Vercel Web Analytics (plus bas) ne compte que les pages vues : sur le
+     plan Hobby, les événements personnalisés sont payants, donc le clic vers
+     l'App Store y est invisible. C'est justement le seul chiffre qui manque
+     entre « 415 visites » et « 29 vues de fiche ».
+
+     PostHog capture ça gratuitement : autocapture (tous les clics), session
+     replay (on regarde ce que les gens font), et l'événement nommé
+     `cta_appstore_click` ajouté plus bas.
+
+     Le token `phc_…` est une clé publique en écriture seule, prévue pour être
+     lue dans le navigateur — rien à cacher ici.
+
+     Le projet PostHog est partagé avec l'autre produit : la super-propriété
+     `product: hydra` (register ci-dessous) permet de filtrer proprement.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+!function(t,e){var o,n,p,r;e.__SV||(window.posthog && window.posthog.__loaded)||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagResult isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty createPersonProfile opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+
+posthog.init('phc_kFUVebGAMN7axPdRMEELexUzUtTgTz6jaPdR2ycX9ikb', {
+  api_host: 'https://eu.i.posthog.com',   // compte hébergé en UE
+  defaults: '2026-05-30',
+});
+
+// Marque toutes les données de cette page. `product` sépare HYDRA de l'autre
+// produit dans le même projet ; `campaign` reprend le `?c=` des publicités,
+// ce qui permet de comparer les créas jusqu'au clic App Store.
+(function () {
+  var c = new URLSearchParams(location.search).get('c');
+  posthog.register({ product: 'hydra', site: 'landing', campaign: c || 'direct' });
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -258,9 +293,6 @@
 
   footer{text-align:center;padding:48px 24px;color:var(--dim);font-size:11px;border-top:1px solid #14171d}
   footer .fbrand{font-family:'Chakra Petch';letter-spacing:.4em;color:var(--text);margin-bottom:8px}
-  footer .flinks{margin-top:10px}
-  footer .flinks a{color:var(--dim);text-decoration:none;margin:0 8px}
-  footer .flinks a:hover{color:var(--text)}
   @media(max-width:520px){ .hero{min-height:80vh} section{padding:56px 18px} }
 </style>
 </head>
@@ -466,9 +498,6 @@
 <footer hidden>
   <div class="fbrand">HYDRA</div>
   <p>iOS uniquement au lancement. Aucune donnée revendue, aucun tracker tiers.</p>
-  <div class="flinks">
-    <a href="/privacy.html">Confidentialité</a>·<a href="/support.html">Support</a>
-  </div>
 </footer>
 
 <script>
@@ -974,6 +1003,30 @@ async function doSignup() {
     url.searchParams.set('mt', '8');
     link.href = url.toString();
   } catch (e) { /* lien laissé intact : mieux vaut perdre la mesure que le clic */ }
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     LE CHIFFRE MANQUANT : combien de visiteurs cliquent vraiment.
+
+     L'autocapture de PostHog verrait déjà ce clic, mais noyé dans tous les
+     autres. Un événement nommé permet de construire le tunnel en deux clics :
+     $pageview → cta_appstore_click, et de le découper par campagne.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  var link = document.getElementById('ctaStore');
+  if (!link || typeof posthog === 'undefined') return;
+
+  link.addEventListener('click', function () {
+    // Pas de preventDefault ni de délai : faire attendre l'utilisateur pour
+    // sauver une mesure coûterait plus de clics que la mesure n'en explique.
+    // posthog-js envoie en `keepalive`, la requête survit à la navigation.
+    posthog.capture('cta_appstore_click', {
+      href: link.href,
+      seconds_on_page: Math.round(performance.now() / 1000),
+    });
+  });
 })();
 </script>
 
