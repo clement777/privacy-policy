@@ -119,12 +119,44 @@ posthog.init('phc_kFUVebGAMN7axPdRMEELexUzUtTgTz6jaPdR2ycX9ikb', {
   }
   .bridge-btn:active{background:#0062cc}
   .bridge-note{font-size:13px;color:#a1a1a6;margin-top:16px}
+  /* Ce pied de page a coûté très cher.
+
+     Il était en `position:fixed; left:0; right:0; bottom:0` — une barre
+     pleine largeur collée en bas de la fenêtre. Sur un écran haut, elle est
+     loin du bouton. Mais dès que la fenêtre descend sous ~380 px de haut
+     (téléphone en PAYSAGE, ou navigateur intégré avec de grosses barres),
+     le contenu centré déborde, le bouton glisse dessous, et la barre
+     intercepte le clic.
+
+     Le bouton reste parfaitement VISIBLE et parfaitement INERTE. C'est ce
+     qui produisait les sessions à 28 taps : la personne voit le bouton,
+     appuie, rien ne se passe, elle recommence.
+
+     `pointer-events:none` sur le conteneur garantit que cette barre ne peut
+     plus jamais rien intercepter ; les liens la réactivent pour eux-mêmes. */
   .bridge-footer{
     position:fixed;left:0;right:0;bottom:0;padding:18px;text-align:center;
     font-family:-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
     font-size:12px;color:#c7c7cc;border:0;
+    pointer-events:none;
   }
-  .bridge-footer a{color:#a1a1a6;text-decoration:none;margin:0 6px}
+  .bridge-footer a{color:#a1a1a6;text-decoration:none;margin:0 6px;pointer-events:auto}
+
+  /* Deuxième garde-fou : sur écran bas, on compacte au lieu de déborder.
+     `justify-content:flex-start` évite en plus que le haut du contenu parte
+     hors de l'écran, là où un débordement centré le rend inatteignable. */
+  @media (max-height:600px){
+    /* Sur écran bas la barre repasse dans le flux normal : un élément dans
+       le flux ne peut pas, par construction, se superposer au bouton. */
+    .bridge-footer{position:static;padding:16px 18px 28px}
+    .bridge{justify-content:flex-start;padding:20px 24px 4px}
+    .bridge-icon{width:76px;height:76px}
+    .bridge-name{font-size:22px;margin-top:14px}
+    .bridge-sub{font-size:15px}
+    .bridge-meta{margin-top:10px}
+    .bridge-btn{margin-top:22px;padding:14px 44px}
+    .bridge-note{margin-top:12px}
+  }
 
   /* ===== MOCKUP iPHONE (démo interactive) ===== */
   .mock{--line:#1a1f28;--panel:#0B0D11;--panel-2:#121620;
