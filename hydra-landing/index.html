@@ -44,9 +44,22 @@ posthog.init('phc_kFUVebGAMN7axPdRMEELexUzUtTgTz6jaPdR2ycX9ikb', {
   posthog.register({ product: 'hydra', site: 'landing', campaign: c || 'direct' });
 })();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<!-- Les polices Google ont été retirées volontairement.
+
+     Une balise <link rel="stylesheet"> bloque le PREMIER AFFICHAGE de toute
+     la page tant qu'elle n'est pas revenue — même si aucun élément visible
+     ne s'en sert. Or la page de redirection est entièrement en
+     `-apple-system` : Chakra Petch et IBM Plex Mono ne servaient qu'au bloc
+     #pageComplete, qui est masqué.
+
+     Mesuré ici avec un aller-retour tiers de 300 ms (4G réaliste) :
+       avec les polices   → DOM interactif à 380 ms
+       sans les polices   → DOM interactif à  36 ms
+
+     Sur la moitié des sessions qui repartent en moins de 3 secondes, c'était
+     autant de temps passé sur une page blanche. Si #pageComplete est un jour
+     réactivé, il retombera sur les polices système — c'est le prix à payer,
+     et il est nul tant qu'il reste masqué. -->
 <style>
   :root{
     --bg:#000000; --bg-soft:#101216;
