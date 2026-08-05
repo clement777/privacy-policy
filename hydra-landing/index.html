@@ -44,6 +44,34 @@ posthog.init('phc_kFUVebGAMN7axPdRMEELexUzUtTgTz6jaPdR2ycX9ikb', {
   posthog.register({ product: 'hydra', site: 'landing', campaign: c || 'direct' });
 })();
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     PIXEL TIKTOK
+
+     Sert à deux choses, et la seconde vaut bien plus que la première :
+
+     1. mesurer les visites venues de TikTok ;
+     2. renvoyer l'événement `ClickButton` (voir en bas de page, sur le CTA),
+        ce qui permet de lancer une campagne « Conversions sur le site web »
+        optimisée sur le clic vers l'App Store — au lieu d'une campagne
+        Trafic optimisée sur l'ouverture de page.
+
+     C'est exactement la correction qu'on ne peut pas faire côté Meta faute
+     de compte développeur. TikTok l'autorise avec un simple pixel.
+
+     Le script est chargé en `async` par le stub : il ne bloque pas le premier
+     affichage, contrairement à la feuille de style de polices qu'on a retirée
+     hier. ═══════════════════════════════════════════════════════════════ -->
+<script>
+!function (w, d, t) {
+  w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie","holdConsent","revokeConsent","grantConsent"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(
+var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var r="https://analytics.tiktok.com/i18n/pixel/events.js",o=n&&n.partner;ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=r,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};n=document.createElement("script")
+;n.type="text/javascript",n.async=!0,n.src=r+"?sdkid="+e+"&lib="+t;e=document.getElementsByTagName("script")[0];e.parentNode.insertBefore(n,e)};
+
+  ttq.load('D9PK5V3C77UDV6S3K5T0');
+  ttq.page();
+}(window, document, 'ttq');
+</script>
 <!-- Les polices Google ont été retirées volontairement.
 
      Une balise <link rel="stylesheet"> bloque le PREMIER AFFICHAGE de toute
@@ -1066,16 +1094,34 @@ async function doSignup() {
 <script>
 (function () {
   var link = document.getElementById('ctaStore');
-  if (!link || typeof posthog === 'undefined') return;
+  if (!link) return;
 
   link.addEventListener('click', function () {
+    var secondes = Math.round(performance.now() / 1000);
+
     // Pas de preventDefault ni de délai : faire attendre l'utilisateur pour
     // sauver une mesure coûterait plus de clics que la mesure n'en explique.
     // posthog-js envoie en `keepalive`, la requête survit à la navigation.
-    posthog.capture('cta_appstore_click', {
-      href: link.href,
-      seconds_on_page: Math.round(performance.now() / 1000),
-    });
+    if (typeof posthog !== 'undefined') {
+      posthog.capture('cta_appstore_click', {
+        href: link.href,
+        seconds_on_page: secondes,
+      });
+    }
+
+    // Le même clic, renvoyé à TikTok. C'est CET événement qui permet de
+    // lancer une campagne « Conversions » optimisée sur le clic vers l'App
+    // Store, au lieu d'une campagne Trafic optimisée sur l'ouverture de page.
+    // Toute la journée d'hier a montré que l'ouverture de page ne vaut rien :
+    // 47 % repartent avant l'affichage. Ici, TikTok apprend à chercher des
+    // gens qui vont jusqu'au bout.
+    if (typeof ttq !== 'undefined') {
+      ttq.track('ClickButton', {
+        content_name: 'Voir l\'application',
+        content_type: 'product',
+        description: 'clic vers la fiche App Store',
+      });
+    }
   });
 })();
 </script>
