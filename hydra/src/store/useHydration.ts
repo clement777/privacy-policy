@@ -39,6 +39,18 @@ interface HydraState {
   // `onboarded` — a cloud pull would otherwise re-apply onboarded=false after
   // Terminer and loop the user back to step 0.
   reconfiguring: boolean;
+  // Le guide d'ajout du widget a-t-il déjà été proposé sur CET appareil ?
+  //
+  // Toute la promesse vendue par les publicités est la barre sur l'écran
+  // verrouillé, or l'ajouter demande cinq gestes qu'on ne devine pas. Un
+  // utilisateur qui ne le fait pas se retrouve avec un compteur d'eau de plus
+  // et annule son essai — ce qu'on observe. Le guide existait déjà mais vivait
+  // dans le troisième onglet, où rien ne conduisait.
+  //
+  // Volontairement local et non synchronisé : le widget s'installe appareil par
+  // appareil, donc un second iPhone doit revoir le guide.
+  widgetGuideSeen: boolean;
+  markWidgetGuideSeen: () => void;
   // Which Supabase user the local hydration data belongs to. null = anonymous
   // (onboarding funnel) or wiped after sign-out. Prevents pushing user A's
   // local bar into user B's cloud row on account switch.
@@ -102,9 +114,14 @@ export const useHydration = create<HydraState>()(
       hydrated: false,
       onboarded: false,
       reconfiguring: false,
+      widgetGuideSeen: false,
       dataOwnerUserId: null,
       deletedKeys: [],
       cloudCursor: null,
+
+      markWidgetGuideSeen() {
+        set({ widgetGuideSeen: true });
+      },
 
       // First-run setup: apply the collected profile + water container in one
       // shot (single profile event, single sync) and flip the onboarded flag.
@@ -137,6 +154,9 @@ export const useHydration = create<HydraState>()(
           widget: { ...DEFAULT_WIDGET_SETTINGS },
           onboarded: false,
           reconfiguring: false,
+          // Le prochain compte sur cet appareil repasse par le guide : c'est un
+          // nouvel utilisateur, et rien ne dit que le widget est déjà en place.
+          widgetGuideSeen: false,
           dataOwnerUserId: null,
           deletedKeys: [],
           cloudCursor: null,
@@ -346,6 +366,7 @@ export const useHydration = create<HydraState>()(
         presets: s.presets,
         widget: s.widget,
         onboarded: s.onboarded,
+        widgetGuideSeen: s.widgetGuideSeen,
         dataOwnerUserId: s.dataOwnerUserId,
         deletedKeys: s.deletedKeys,
         cloudCursor: s.cloudCursor,

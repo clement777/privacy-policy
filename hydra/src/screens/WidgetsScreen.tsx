@@ -106,11 +106,25 @@ export function WidgetsScreen() {
     updateWidget,
     refreshWidget,
     restartOnboarding,
+    widgetGuideSeen,
+    markWidgetGuideSeen,
   } = useHydration();
 
   const { user, signOut, deleteAccount } = useAuth();
   const [mode, setMode] = useState<PreviewMode>('live');
   const [guide, setGuide] = useState<GuideTarget | null>(null);
+
+  // Premier lancement : on ouvre le guide de l'écran verrouillé sans attendre
+  // que l'utilisateur le cherche. App.tsx l'a déjà déposé sur cet onglet ; sans
+  // cette ouverture il verrait un écran de réglages, pas une marche à suivre.
+  //
+  // Une seule fois, et le drapeau est posé à l'ouverture (pas à la fermeture) :
+  // quelqu'un qui referme aussitôt ne doit pas le retrouver à chaque passage.
+  useEffect(() => {
+    if (widgetGuideSeen) return;
+    setGuide('lock');
+    markWidgetGuideSeen();
+  }, [widgetGuideSeen, markWidgetGuideSeen]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Traité comme activé tant qu'il n'est pas explicitement désactivé — même
   // repli que scheduler.ts pour rester compatible avec les profils existants.

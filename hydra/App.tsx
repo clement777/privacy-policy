@@ -71,6 +71,7 @@ export default function App() {
 
   const onboarded = useHydration((s) => s.onboarded);
   const reconfiguring = useHydration((s) => s.reconfiguring);
+  const widgetGuideSeen = useHydration((s) => s.widgetGuideSeen);
   const authStatus = useAuth((s) => s.status);
   const userId = useAuth((s) => s.user?.id ?? null);
   const subStatus = useSubscription((s) => s.status);
@@ -80,6 +81,18 @@ export default function App() {
   // Lets a signed-out user open the account screen straight from the paywall
   // (returning users reinstalling, or the App Store reviewer signing in).
   const [wantsSignIn, setWantsSignIn] = useState(false);
+
+  // Premier onglet du tout premier lancement : WIDGETS, pas BARRE.
+  //
+  // Ce que la publicité vend, c'est la barre de vie sur l'écran verrouillé —
+  // et l'y mettre demande cinq gestes iOS qu'on ne devine pas. Déposer les
+  // nouveaux venus sur l'accueil leur donne un compteur d'eau et laisse la
+  // promesse non tenue ; l'onglet WIDGETS ouvre le guide directement.
+  //
+  // Figé au montage : React Navigation ignore les changements ultérieurs de
+  // `initialRouteName`, et WidgetsScreen lève le drapeau dès l'ouverture du
+  // guide. Sans ce gel, la valeur changerait sous les pieds du navigateur.
+  const [initialTab] = useState(() => (widgetGuideSeen ? 'BARRE' : 'WIDGETS'));
 
   // Signing in makes the detour above obsolete, and leaving it set is what App
   // Review reported twice as "no action took place": the sign-in branch requires
@@ -261,6 +274,7 @@ export default function App() {
         >
           <StatusBar style="light" />
           <Tab.Navigator
+            initialRouteName={initialTab}
             screenOptions={{
               headerShown: false,
               tabBarStyle: {
