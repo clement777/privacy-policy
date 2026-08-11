@@ -4,7 +4,7 @@ Document de reprise. Toute nouvelle session (Claude Code, Claude, Cowork) doit
 pouvoir démarrer avec ça et rien d'autre. **À tenir à jour** : quand un chiffre
 ou une décision change, corrige-le ici plutôt que d'ajouter une ligne.
 
-Dernière mise à jour : 8 août 2026.
+Dernière mise à jour : 11 août 2026.
 
 ---
 
@@ -74,11 +74,39 @@ Si ces clics valaient ceux de la vidéo, on attendrait ~24 essais.
 
 → **Carrousel = organique. Vidéo = payant.**
 
-### Conversion des essais
+### Le tunnel complet (11 août)
 
-6 essais réels, **4 annulés, 2 actifs** — environ 33 %. C'est le goulot actuel,
-et c'est un problème **produit**, pas marketing : doubler ce taux vaut plus que
-diviser le coût d'acquisition par deux, et c'est gratuit.
+```
+100 téléchargements
+  ↓  7 %        ← LA PLUS GROSSE FUITE
+  7 essais gratuits
+  ↓  33 %
+  2 abonnés payants réels  (+1 compte interne)
+```
+
+**93 personnes sur 100 téléchargent sans jamais démarrer l'essai.** Le paywall
+est dur : elles abandonnent donc pendant le questionnaire, pendant l'écran de
+préparation (7,6 s), ou devant le prix. **On ne sait pas laquelle** — l'app
+n'est pas instrumentée.
+
+Levier comparé, sur 100 téléchargements :
+
+| Améliorer | De → à | Gain |
+|---|---|---|
+| Téléchargement → essai | 7 % → 12 % | **+5 essais** |
+| Essai → payant | 33 % → 50 % | +1 abonné |
+
+→ Le premier levier vaut cinq fois le second. **Instrumenter l'app passe avant
+tout le reste.**
+
+Conversion essai → payant mesurée sur une vraie cohorte : **2 sur 6 = 33 %**
+(fourchette basse du secteur, 30-50 %).
+
+### Revenus (11 août)
+
+3 abonnements dont 1 compte interne → **2 payants réels, ~8 €/mois brut**.
+Impressions App Store : 154 (4 août) → **592** (10 août), effet des vidéos
+TikTok. Vues de fiche → téléchargement : ~31 %, la fiche reste excellente.
 
 ### Économie unitaire
 
@@ -140,9 +168,9 @@ qui n'a pas de seuil.
 
 | | Effort | Impact |
 |---|---|---|
+| **`posthog-react-native` dans l'app** | 1 j | **priorité n°1** — 93 téléchargements sur 100 se perdent avant l'essai, on ne sait pas où |
 | **Small Business Program** | 5 min | +18 % de marge, gratuit |
 | **Offre annuelle 29,99 €** | quelques heures | remboursement immédiat de l'acquisition |
-| **`posthog-react-native` dans l'app** | 1 j | savoir *pourquoi* les essais sont annulés |
 | **Soumettre le build 8** | — | contient 3 correctifs déjà faits (voir ci-dessous) |
 | **ASO** — « hydra » ne fait pas sortir l'app | 1 version | premier canal, il fuit |
 | **Apple Search Ads** | 20 min | achète le canal qui produit déjà 73 % |
