@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../store/useAuth';
+import { track, EV } from '../analytics/analytics';
 import { C, FONTS, RADIUS } from '../theme/colors';
 
 type Mode = 'signIn' | 'signUp';
@@ -48,6 +49,13 @@ export function AuthScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // Dernière marche du premier lancement : l'essai est déjà démarré, on demande
+  // un compte pour sauvegarder la progression. Quelqu'un qui bloque ici a payé
+  // sans jamais entrer dans l'app — un profil qui annule à coup sûr.
+  useEffect(() => {
+    track(EV.accountScreenViewed, { mode: initialMode });
+  }, [initialMode]);
 
   const submitEmail = async () => {
     setError(null);

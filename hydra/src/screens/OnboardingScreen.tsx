@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { C, FONTS, RADIUS } from '../theme/colors';
 import { awakeHoursFromSleep, FEELING_LEVEL_PCT, FeelingKey, ML_PER_KG_DAY, Sex } from '../engine/hydrationEngine';
 import { useHydration } from '../store/useHydration';
+import { track, EV } from '../analytics/analytics';
 import { WATER_CONTAINERS } from '../store/widgetSettings';
 
 const STEP_TITLES = [
@@ -134,6 +135,17 @@ export function OnboardingScreen({
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
 
+  // Un événement par étape affichée. C'est cette suite qui dira laquelle des
+  // questions fait décrocher — aujourd'hui on sait seulement que 93 personnes
+  // sur 100 n'arrivent jamais à l'essai, sans savoir où elles s'arrêtent.
+  useEffect(() => {
+    track(EV.onboardingStep, { index: step, title: STEP_TITLES[step] });
+  }, [step]);
+
+  useEffect(() => {
+    track(EV.onboardingStarted);
+  }, []);
+
   const [sex, setSex] = useState<Sex>(profile.sex);
   const [weightKg, setWeightKg] = useState(profile.weightKg);
   const [sleepStartHour, setSleepStartHour] = useState(profile.sleepStartHour);
@@ -199,6 +211,9 @@ export function OnboardingScreen({
     // paywall). The duration comes from the message list itself, so the screen
     // never cuts off mid-sequence.
     setPreparing(true);
+    // 7,6 secondes d'attente juste avant le paywall : suspect n°1 des abandons.
+    // Comparer ce compteur à `onboarding_completed` donne le taux de survie.
+    track(EV.onboardingPreparing, { duration_ms: PREP_TOTAL_MS });
     await new Promise((r) => setTimeout(r, PREP_TOTAL_MS));
     const water =
       customMode && Number(customMl) >= CUSTOM_MIN
@@ -218,6 +233,7 @@ export function OnboardingScreen({
       },
       { defaultWaterMl: water }
     );
+    track(EV.onboardingCompleted);
   };
 
   if (preparing) return <PreparingView need={need} />;

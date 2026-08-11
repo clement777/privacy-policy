@@ -15,6 +15,7 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { C, FONTS } from './src/theme/colors';
 import { ensurePermissions } from './src/notifications/scheduler';
+import { initAnalytics, flushAnalytics } from './src/analytics/analytics';
 import { useHydration } from './src/store/useHydration';
 import { useAuth } from './src/store/useAuth';
 import { useSubscription } from './src/store/useSubscription';
@@ -122,6 +123,7 @@ export default function App() {
 
 
   useEffect(() => {
+    initAnalytics();
     ensurePermissions().catch(() => {});
     // Bring up auth, then wire cloud sync (sign-in + debounced local changes).
     useAuth
@@ -146,6 +148,10 @@ export default function App() {
     pull();
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') pull();
+      // iOS peut suspendre le processus avant l'envoi périodique : on vide la
+      // file en partant, sinon les abandons — précisément ce qu'on cherche à
+      // mesurer — seraient les événements les plus souvent perdus.
+      else flushAnalytics();
     });
     return () => sub.remove();
   }, [storeHydrated]);

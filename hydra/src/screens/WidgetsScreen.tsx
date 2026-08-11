@@ -21,6 +21,7 @@ import {
   Zone,
 } from '../engine/hydrationEngine';
 import { useHydration } from '../store/useHydration';
+import { track, EV } from '../analytics/analytics';
 import { ensurePermissions } from '../notifications/scheduler';
 import { LockWidget, MediumWidget, SmallWidget } from '../components/WidgetMocks';
 import { WidgetAddGuide, GuideTarget } from '../components/WidgetAddGuide';
@@ -124,6 +125,7 @@ export function WidgetsScreen() {
     if (widgetGuideSeen) return;
     setGuide('lock');
     markWidgetGuideSeen();
+    track(EV.widgetGuideOpened, { trigger: 'first_launch' });
   }, [widgetGuideSeen, markWidgetGuideSeen]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Traité comme activé tant qu'il n'est pas explicitement désactivé — même

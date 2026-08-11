@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useSubscription } from '../store/useSubscription';
 import { useAuth } from '../store/useAuth';
+import { track, EV } from '../analytics/analytics';
 import { SourcesSheet } from '../components/SourcesSheet';
 import { C, FONTS, RADIUS } from '../theme/colors';
 
@@ -68,6 +69,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const [sourcesOpen, setSourcesOpen] = useState(false);
 
   useEffect(() => {
+    track(EV.paywallViewed);
     loadOfferings();
   }, [loadOfferings]);
 
@@ -75,20 +77,40 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const priceLabel = pkg?.product.priceString ?? '3,99 €';
   const trialLabel = freeTrialLabel(pkg?.product.introPrice ?? null);
 
+  // Une offre qui ne se résout pas affiche un paywall sans prix ni durée
+  // d'essai : l'utilisateur ne peut rien acheter et repart. Invisible jusqu'ici,
+  // et un candidat sérieux pour une part des abandons.
+  useEffect(() => {
+    track(EV.paywallOfferLoaded, {
+      has_package: pkg !== null,
+      price: pkg?.product.priceString ?? null,
+      trial: trialLabel,
+    });
+  }, [pkg, trialLabel]);
+
   const onStart = async () => {
     setError(null);
+    track(EV.paywallStartTapped, { has_package: pkg !== null });
     if (!pkg) {
       setError('Offre indisponible pour le moment. Réessaie dans un instant.');
+      track(EV.paywallPurchaseFailed, { reason: 'no_package' });
       return;
     }
     setBusy(true);
     const r = await purchase(pkg);
     setBusy(false);
     if (!r.ok && r.message) setError(r.message);
+    // `message` est le libellé remonté par RevenueCat/StoreKit. Il distingue une
+    // annulation volontaire d'une carte refusée ou d'un StoreKit indisponible —
+    // trois causes très différentes, qu'on confondait toutes en « il n'a pas pris ».
+    track(r.ok ? EV.paywallPurchaseOk : EV.paywallPurchaseFailed, {
+      reason: r.ok ? undefined : r.message ?? 'unknown',
+    });
   };
 
   const onRestore = async () => {
     setError(null);
+    track(EV.paywallRestoreTapped);
     setBusy(true);
     const r = await restore();
     setBusy(false);
