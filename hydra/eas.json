@@ -24,6 +24,10 @@
       "extends": "development",
       "env": { "HYDRA_NO_WIDGET": "1" }
     },
+    "development-device": {
+      "extends": "development",
+      "ios": { "simulator": false, "resourceClass": "m-medium" }
+    },
     "preview-android": {
       "distribution": "internal",
       "credentialsSource": "local",
