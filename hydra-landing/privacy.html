@@ -46,7 +46,7 @@
   </div>
 
   <h1>Politique de confidentialité</h1>
-  <p class="updated">Dernière mise à jour : juillet 2026</p>
+  <p class="updated">Dernière mise à jour : août 2026</p>
 
   <p>
     HYDRA est une application d'hydratation pour iOS. Cette page explique
@@ -67,6 +67,7 @@
     <li><strong>Profil</strong> : poids, sexe, horaires de sommeil, environnement (température, humidité, altitude) — utilisés uniquement pour calculer ton besoin d'hydratation. Aucune de ces valeurs n'est vérifiée ni partagée : c'est toi qui les saisis.</li>
     <li><strong>Journal d'hydratation</strong> : les verres d'eau, boissons et unités d'alcool que tu enregistres, avec l'heure. C'est le cœur du fonctionnement de l'app (widget, historique, statistiques).</li>
     <li><strong>Préférences</strong> : format de widget, notifications activées, contenant par défaut.</li>
+    <li><strong>Utilisation de l'app</strong> : les écrans que tu ouvres et les actions que tu effectues dans le parcours d'inscription (étape du questionnaire atteinte, affichage de l'écran d'abonnement, démarrage ou échec d'un achat). Ces mesures servent uniquement à comprendre où l'app est difficile à utiliser et à la corriger. Elles ne contiennent <strong>ni ton e‑mail, ni ton poids, ni ton journal d'hydratation</strong> — uniquement des noms d'étapes et des compteurs.</li>
   </ul>
   <p>
     Le poids et le journal de consommation (eau, alcool) peuvent être considérés
@@ -89,8 +90,14 @@
     <li><strong>Supabase</strong> (hébergement de la base de données et authentification) — chaque compte est isolé au niveau de la base (Row Level Security) : personne d'autre que toi ne peut lire tes données.</li>
     <li><strong>RevenueCat</strong> (gestion de l'abonnement) — reçoit un identifiant de compte anonymisé pour savoir si ton abonnement est actif.</li>
     <li><strong>Apple</strong> (Se connecter avec Apple, paiements App Store) — selon les conditions d'Apple.</li>
+    <li><strong>PostHog</strong> (mesure d'utilisation) — reçoit les étapes du parcours décrites plus haut, sans e‑mail ni donnée de santé. Les serveurs utilisés sont <strong>situés dans l'Union européenne</strong> : tes données ne quittent pas l'UE.</li>
   </ul>
-  <p>Nous n'utilisons aucun tracker publicitaire tiers dans l'app.</p>
+  <p>
+    Nous n'utilisons <strong>aucun tracker publicitaire</strong> dans l'app, et
+    aucune donnée n'est transmise à un réseau publicitaire. La mesure
+    d'utilisation ci‑dessus sert exclusivement à améliorer l'application, jamais
+    à te cibler ni à te suivre d'une app à l'autre.
+  </p>
 
   <h2>Combien de temps</h2>
   <p>
@@ -102,10 +109,22 @@
 
   <h2>Tes droits</h2>
   <p>
-    Tu peux à tout moment demander l'accès, la correction ou la suppression
-    de tes données en écrivant à
+    Tu peux à tout moment demander l'accès, la correction, la suppression, la
+    portabilité de tes données, ou t'opposer à leur traitement, en écrivant à
     <a href="mailto:hydraapp.contact@gmail.com">hydraapp.contact@gmail.com</a>, ou en
     utilisant directement la suppression de compte dans l'app.
+  </p>
+  <p>
+    <strong>Bases légales</strong> : les données de compte, de profil et ton
+    journal d'hydratation sont traités pour l'exécution du service auquel tu as
+    souscrit. La mesure d'utilisation repose sur notre intérêt légitime à
+    corriger les défauts de l'application — tu peux t'y opposer à l'adresse
+    ci‑dessus, et nous cesserons de la collecter pour ton compte.
+  </p>
+  <p>
+    Si une réponse ne te satisfait pas, tu peux introduire une réclamation
+    auprès de l'autorité de contrôle de ton pays — en France, la
+    <a href="https://www.cnil.fr" target="_blank" rel="noopener">CNIL</a>.
   </p>
 
   <h2>Sécurité</h2>
