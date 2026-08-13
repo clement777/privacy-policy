@@ -20,6 +20,18 @@ struct HydraSnapshotRW: Codable {
     var updatedAt: TimeInterval
     var events: [HydrationEvent]
     var profile: UserProfile
+    // Abonnement actif, écrit par l'app à chaque synchronisation.
+    //
+    // Le widget tourne sans l'app et ne peut pas interroger RevenueCat. Sans ce
+    // champ, les intents écrivaient dans l'App Group sans aucun contrôle :
+    // quelqu'un qui avait terminé le questionnaire sans payer pouvait ajouter le
+    // widget et logger ses verres depuis l'écran verrouillé — c'est-à-dire
+    // utiliser gratuitement ce que l'abonnement vend.
+    //
+    // Optionnel : un snapshot écrit par une version antérieure de l'app n'a pas
+    // la clé, et ne doit pas verrouiller un abonné existant. D'où le repli
+    // permissif dans `isPro` ci-dessous.
+    var pro: Bool?
 }
 
 enum HydraStore {
@@ -37,10 +49,20 @@ enum HydraStore {
         d.set(s, forKey: SNAPSHOT_KEY)
     }
 
+    // Repli VOLONTAIREMENT permissif : `pro` absent signifie un snapshot écrit
+    // par une version antérieure, donc un utilisateur qui pouvait logger hier.
+    // Le bloquer sur une clé manquante casserait le widget d'un abonné payant le
+    // temps que l'app se relance — un faux négatif coûte bien plus cher ici
+    // qu'un faux positif, qui se corrige au premier lancement suivant.
+    static func isPro() -> Bool {
+        loadRW()?.pro ?? true
+    }
+
     // Append a water event, honoring the rolling absorption cap so a spammed
     // button can't over-fill the bar — same guard as the RN store.
     @discardableResult
     static func logWater(volumeMl: Double) -> Bool {
+        guard isPro() else { return false }
         guard var snap = loadRW() else { return false }
         let now = Date().timeIntervalSince1970 * 1000
         // waterAbsorbedInWindow sorts + credits through the shared Derived cache
@@ -58,6 +80,7 @@ enum HydraStore {
     // Append an alcohol event (used by the systemMedium tier buttons).
     @discardableResult
     static func logAlcohol(volumeMl: Double, abv: Double) -> Bool {
+        guard isPro() else { return false }
         guard var snap = loadRW() else { return false }
         let now = Date().timeIntervalSince1970 * 1000
         snap.events.append(HydrationEvent(

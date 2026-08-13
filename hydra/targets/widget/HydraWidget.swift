@@ -128,24 +128,48 @@ struct HydraSegBar: View {
 }
 
 // A rounded action button matching the mockup's ".w-btn".
+//
+// Deux comportements selon l'abonnement, et c'est délibéré :
+//
+//   abonné      → Button(intent:) — l'appui logge sur place, sans ouvrir l'app.
+//                 C'est toute la promesse du produit.
+//   non-abonné  → Link vers hydra://paywall — l'appui ouvre l'app sur le
+//                 paywall.
+//
+// Un simple garde dans l'intent aurait suffi à empêcher le contournement, mais
+// il aurait laissé un bouton parfaitement visible et parfaitement mort. C'est
+// exactement le défaut qui a fait taper 28 fois un visiteur sur la landing page
+// avant qu'on le corrige : un bouton inerte ne dit pas « paie », il dit
+// « cassé », et l'utilisateur en conclut que l'app ne marche pas.
+//
+// Le widget devient ainsi sa propre publicité : la barre descend sous les yeux
+// de l'utilisateur toute la journée, et chaque tentative d'action le mène au
+// paywall au moment précis où il voulait s'en servir.
 @available(iOS 17.0, *)
 struct HydraTapButton<I: AppIntent>: View {
     let title: String
     let color: Color
     let intent: I
+
+    private var label: some View {
+        Text(title)
+            .font(.system(size: 10.5, weight: .heavy))
+            .kerning(0.5)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .background(color.opacity(0.16))
+            .overlay(RoundedRectangle(cornerRadius: 11).stroke(color.opacity(0.42), lineWidth: 1))
+            .foregroundColor(color)
+            .clipShape(RoundedRectangle(cornerRadius: 11))
+    }
+
     var body: some View {
-        Button(intent: intent) {
-            Text(title)
-                .font(.system(size: 10.5, weight: .heavy))
-                .kerning(0.5)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 7)
-                .background(color.opacity(0.16))
-                .overlay(RoundedRectangle(cornerRadius: 11).stroke(color.opacity(0.42), lineWidth: 1))
-                .foregroundColor(color)
-                .clipShape(RoundedRectangle(cornerRadius: 11))
+        if HydraStore.isPro() {
+            Button(intent: intent) { label }
+                .buttonStyle(.plain)
+        } else {
+            Link(destination: URL(string: "hydra://paywall")!) { label }
         }
-        .buttonStyle(.plain)
     }
 }
 

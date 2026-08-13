@@ -13,6 +13,17 @@ export interface SharedSnapshot {
   events: HydrationEvent[];
   profile: UserProfile;
   widget?: WidgetSettings;
+  // Abonnement actif ? Le widget en a besoin pour décider s'il logge ou s'il
+  // renvoie vers le paywall.
+  //
+  // Sans ce champ, les App Intents écrivaient dans l'App Group sans le moindre
+  // contrôle : n'importe qui ayant terminé le questionnaire pouvait ajouter le
+  // widget et logger ses verres gratuitement depuis l'écran verrouillé — c'est
+  // exactement la fonctionnalité vendue par l'abonnement.
+  //
+  // Optionnel et lu avec un repli permissif côté Swift : un snapshot écrit par
+  // une version antérieure ne doit pas verrouiller un abonné existant.
+  pro?: boolean;
 }
 
 const APP_GROUP =

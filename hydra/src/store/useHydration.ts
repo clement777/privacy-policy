@@ -25,6 +25,7 @@ import {
   DEFAULT_WIDGET_SETTINGS,
   WidgetSettings,
 } from './widgetSettings';
+import { useSubscription } from './useSubscription';
 import { rescheduleNotifications } from '../notifications/scheduler';
 import { activeSportSessions } from '../util/sport';
 
@@ -303,6 +304,11 @@ export const useHydration = create<HydraState>()(
           events,
           profile,
           widget,
+          // Le widget tourne sans l'app : il ne peut pas interroger RevenueCat
+          // lui-même. Le statut voyage donc par le snapshot, réécrit à chaque
+          // synchronisation — y compris juste après un achat, puisque le store
+          // d'abonnement déclenche un _sync en changeant d'état.
+          pro: useSubscription.getState().status === 'active',
         });
         await reloadWidgetTimelines();
         await updateAndroidWidgets(events, profile, widget);
