@@ -97,7 +97,11 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
     useSubscription();
   const { signOut, status: authStatus } = useAuth();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Un message d'achat n'est pas toujours une erreur : un paiement en attente
+  // de validation bancaire est une bonne nouvelle mal habillée. Deux tons.
+  const [msg, setMsg] = useState<{ text: string; tone: 'error' | 'info' } | null>(
+    null
+  );
   const [sourcesOpen, setSourcesOpen] = useState(false);
   // Le mensuel est le défaut : c'est lui qui porte les 7 jours d'essai, donc
   // celui qui fait démarrer le tunnel. L'annuel se choisit, il ne s'impose pas.
@@ -141,46 +145,49 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   }, [pkg?.identifier, period.long, trialLabel]);
 
   const onStart = async () => {
-    setError(null);
+    setMsg(null);
     track(EV.paywallStartTapped, {
       has_package: pkg !== null,
       plan: pkg?.packageType ?? null,
       trial: trialLabel,
     });
     if (!pkg) {
-      setError('Offre indisponible pour le moment. Réessaie dans un instant.');
-      track(EV.paywallPurchaseFailed, { reason: 'no_package' });
+      setMsg({
+        text: 'Offre indisponible pour le moment. Réessaie dans un instant.',
+        tone: 'error',
+      });
+      track(EV.paywallPurchaseFailed, { outcome: 'error', code: 'no_package' });
       return;
     }
     setBusy(true);
     const r = await purchase(pkg);
     setBusy(false);
-    if (!r.ok && r.message) setError(r.message);
-    // `message` est le libellé remonté par RevenueCat/StoreKit. Il distingue une
-    // annulation volontaire d'une carte refusée ou d'un StoreKit indisponible —
-    // trois causes très différentes, qu'on confondait toutes en « il n'a pas pris ».
-    //
-    // `||` et non `??` : une annulation volontaire remonte une chaîne VIDE, que
-    // `??` laisse passer telle quelle — on enregistrait alors `reason: ''`.
+    setMsg(
+      r.message
+        ? { text: r.message, tone: r.outcome === 'pending' ? 'info' : 'error' }
+        : null
+    );
+    // `outcome` sépare enfin les quatre issues. Un paiement `pending` est compté
+    // ici comme un échec d'achat immédiat — c'en est un du point de vue du
+    // tunnel — mais la propriété permet de le sortir du dénominateur : il peut
+    // aboutir plus tard, sans que l'utilisateur retouche à quoi que ce soit.
     track(r.ok ? EV.paywallPurchaseOk : EV.paywallPurchaseFailed, {
-      reason: r.ok ? undefined : r.message || 'user_cancelled_or_unknown',
+      outcome: r.outcome,
+      code: r.code || null,
       plan: pkg.packageType,
     });
   };
 
   const onRestore = async () => {
-    setError(null);
+    setMsg(null);
     track(EV.paywallRestoreTapped);
     setBusy(true);
     const r = await restore();
     setBusy(false);
-    if (!r.ok && r.message) setError(r.message);
+    setMsg(r.message ? { text: r.message, tone: 'error' } : null);
     // Sans ce résultat, on a vu quelqu'un taper neuf fois en cinq secondes sans
     // savoir ce que l'app lui répondait à chaque fois.
-    track(EV.paywallRestoreResult, {
-      ok: r.ok,
-      reason: r.ok ? undefined : r.message || 'unknown',
-    });
+    track(EV.paywallRestoreResult, { outcome: r.outcome, code: r.code || null });
   };
 
   return (
@@ -259,7 +266,11 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
           réel, widgets, historique) nécessite l'abonnement HYDRA Pro.
         </Text>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {msg ? (
+          <Text style={msg.tone === 'info' ? styles.notice : styles.error}>
+            {msg.text}
+          </Text>
+        ) : null}
 
         <Pressable
           style={[styles.cta, busy && { opacity: 0.6 }]}
@@ -423,6 +434,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   error: { color: C.red, fontFamily: FONTS.mono, fontSize: 12, marginBottom: 10 },
+  // Même emplacement que l'erreur, ton opposé : ce message dit « ça avance ».
+  notice: {
+    color: C.segmentFull,
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
   cta: {
     backgroundColor: C.segmentFull,
     borderRadius: RADIUS.md,

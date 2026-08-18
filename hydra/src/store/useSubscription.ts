@@ -40,7 +40,91 @@ const apiKey =
 export const paywallEnabled = (): boolean => !!Purchases && apiKey.length > 0;
 
 export type SubStatus = 'loading' | 'active' | 'inactive';
-export type PurchaseResult = { ok: true } | { ok: false; message: string };
+
+/** Ce que StoreKit a réellement répondu. Quatre issues très différentes, qu'on
+ *  confondait jusqu'ici en un seul « échec ». */
+export type PurchaseOutcome = 'ok' | 'cancelled' | 'pending' | 'error';
+
+export interface PurchaseResult {
+  ok: boolean;
+  outcome: PurchaseOutcome;
+  /** Code RevenueCat brut, pour la mesure uniquement. */
+  code: string;
+  /** Message destiné à l'utilisateur, en français. Vide = ne rien afficher. */
+  message: string;
+}
+
+// Codes de PURCHASES_ERROR_CODE, recopiés plutôt qu'importés : l'enum est une
+// valeur, donc un import réel du module natif — or tout ce fichier est écrit
+// pour survivre à son absence (Expo Go, web).
+const RC_CANCELLED = '1';
+const RC_STORE_PROBLEM = '2';
+const RC_NOT_ALLOWED = '3';
+const RC_PRODUCT_UNAVAILABLE = '5';
+const RC_ALREADY_PURCHASED = '6';
+const RC_NETWORK = '10';
+const RC_PAYMENT_PENDING = '20';
+const RC_OFFLINE = '35';
+
+// StoreKit et RevenueCat renvoient des libellés anglais écrits pour un
+// développeur. Les afficher tels quels à quelqu'un qui vient de taper
+// « COMMENCER L'ESSAI GRATUIT » lui apprend que quelque chose a cassé.
+//
+// Le cas qui a motivé cette table : « The payment is pending. The payment is
+// deferred. » Ce n'est PAS un échec — l'achat attend une validation (3-D Secure
+// de la banque, très courant en Europe, ou « Demander à acheter » sur un compte
+// familial). Il peut aboutir plusieurs minutes plus tard, et le listener
+// RevenueCat débloquera l'app tout seul. Le présenter comme une erreur rouge
+// fait partir quelqu'un qui était en train d'acheter.
+function describe(code: string): { outcome: PurchaseOutcome; message: string } {
+  switch (code) {
+    case RC_CANCELLED:
+      // Volontaire : aucun message, ce serait reprocher un choix.
+      return { outcome: 'cancelled', message: '' };
+    case RC_PAYMENT_PENDING:
+      return {
+        outcome: 'pending',
+        message:
+          'Achat en attente de validation (ta banque, ou « Demander à acheter »). Rien à refaire : HYDRA se débloque dès que c\'est confirmé.',
+      };
+    case RC_ALREADY_PURCHASED:
+      return {
+        outcome: 'error',
+        message:
+          'Tu as déjà cet abonnement. Utilise « Restaurer mes achats » juste en dessous.',
+      };
+    case RC_NETWORK:
+    case RC_OFFLINE:
+      return {
+        outcome: 'error',
+        message: 'Connexion perdue. Vérifie ton réseau et réessaie.',
+      };
+    case RC_STORE_PROBLEM:
+      return {
+        outcome: 'error',
+        message: 'L\'App Store ne répond pas pour le moment. Réessaie dans un instant.',
+      };
+    case RC_NOT_ALLOWED:
+      return {
+        outcome: 'error',
+        message:
+          'Les achats sont bloqués sur cet appareil (restrictions du Temps d\'écran).',
+      };
+    case RC_PRODUCT_UNAVAILABLE:
+      return {
+        outcome: 'error',
+        message: 'Cette offre n\'est pas disponible sur ton compte App Store.',
+      };
+    default:
+      // Le libellé anglais de StoreKit n'est volontairement PAS affiché : il
+      // ne veut rien dire pour l'utilisateur. Il ne sert qu'à la mesure, où le
+      // code numérique le remplace avantageusement.
+      return {
+        outcome: 'error',
+        message: 'L\'achat n\'a pas abouti. Réessaie dans un instant.',
+      };
+  }
+}
 
 interface SubState {
   status: SubStatus;
@@ -125,30 +209,47 @@ export const useSubscription = create<SubState>((set, get) => ({
   },
 
   async purchase(pkg) {
-    if (!Purchases) return { ok: false, message: 'Achat indisponible ici.' };
+    if (!Purchases) {
+      return { ok: false, outcome: 'error', code: '', message: 'Achat indisponible ici.' };
+    }
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       set({ status: isActive(customerInfo) ? 'active' : 'inactive' });
-      return { ok: true };
+      return { ok: true, outcome: 'ok', code: '', message: '' };
     } catch (e: unknown) {
-      const err = e as { userCancelled?: boolean; message?: string };
-      if (err.userCancelled) return { ok: false, message: '' }; // silent
-      return { ok: false, message: err.message ?? 'Achat impossible.' };
+      const err = e as { code?: string; userCancelled?: boolean };
+      // `userCancelled` est le drapeau documenté ; `code` ne le porte pas
+      // toujours selon la plateforme.
+      const code = err.userCancelled ? RC_CANCELLED : err.code ?? '';
+      return { ok: false, code, ...describe(code) };
     }
   },
 
   async restore() {
-    if (!Purchases) return { ok: false, message: 'Restauration indisponible.' };
+    if (!Purchases) {
+      return {
+        ok: false,
+        outcome: 'error',
+        code: '',
+        message: 'Restauration indisponible ici.',
+      };
+    }
     try {
       const info = await Purchases.restorePurchases();
       const active = isActive(info);
       set({ status: active ? 'active' : 'inactive' });
       return active
-        ? { ok: true }
-        : { ok: false, message: 'Aucun abonnement actif trouvé.' };
+        ? { ok: true, outcome: 'ok', code: '', message: '' }
+        : {
+            ok: false,
+            outcome: 'error',
+            code: 'no_entitlement',
+            message: 'Aucun abonnement actif sur ce compte Apple.',
+          };
     } catch (e: unknown) {
-      const err = e as { message?: string };
-      return { ok: false, message: err.message ?? 'Restauration impossible.' };
+      const err = e as { code?: string };
+      const code = err.code ?? '';
+      return { ok: false, code, ...describe(code) };
     }
   },
 
