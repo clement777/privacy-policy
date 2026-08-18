@@ -106,6 +106,11 @@ export const EV = {
   paywallPurchaseFailed: 'paywall_purchase_failed',
   /** « Restaurer mes achats ». */
   paywallRestoreTapped: 'paywall_restore_tapped',
+  /** Résultat de la restauration. Sans lui, on voyait quelqu'un taper neuf fois
+   *  en cinq secondes sans savoir ce que l'app lui répondait. */
+  paywallRestoreResult: 'paywall_restore_result',
+  /** Bascule mensuel / annuel sur le paywall. */
+  paywallPlanSelected: 'paywall_plan_selected',
 
   /** Écran de compte — dernière marche du premier lancement, essai déjà démarré. */
   accountScreenViewed: 'account_screen_viewed',

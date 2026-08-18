@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { PurchasesPackage } from 'react-native-purchases';
 import { useSubscription } from '../store/useSubscription';
 import { useAuth } from '../store/useAuth';
 import { track, EV } from '../analytics/analytics';
@@ -53,6 +54,37 @@ function freeTrialLabel(intro: {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Choisir l'offre par TYPE, jamais par index.
+//
+// Le paywall lisait `packages[0]`. Le jour où l'offre annuelle a été ajoutée
+// dans RevenueCat, ce premier élément est passé du mensuel à l'annuel : les
+// utilisateurs ont vu « 34,99 €/MOIS », sans essai gratuit, parce que le
+// suffixe « /MOIS » était écrit en dur et que l'annuel n'a pas d'offre
+// d'introduction. Trois personnes ont vu cet écran les 16 et 17 août, aucune
+// n'a touché le bouton — et Apple Search Ads a rapporté zéro essai démarré,
+// ce qui était exact au mot près : l'app n'en proposait plus.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type PlanType = 'MONTHLY' | 'ANNUAL';
+
+function findPackage(
+  packages: PurchasesPackage[],
+  type: PlanType
+): PurchasesPackage | null {
+  return packages.find((p) => p.packageType === type) ?? null;
+}
+
+/** L'unité de période vient du package, jamais d'une constante. */
+function periodLabel(pkg: PurchasesPackage | null): {
+  short: string;
+  long: string;
+} {
+  return pkg?.packageType === 'ANNUAL'
+    ? { short: 'AN', long: 'an' }
+    : { short: 'MOIS', long: 'mois' };
+}
+
 interface Props {
   // Jump to the account screen from the paywall (returning users reinstalling,
   // or the App Store reviewer signing into the test account). Only wired when
@@ -67,30 +99,54 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  // Le mensuel est le défaut : c'est lui qui porte les 7 jours d'essai, donc
+  // celui qui fait démarrer le tunnel. L'annuel se choisit, il ne s'impose pas.
+  const [plan, setPlan] = useState<PlanType>('MONTHLY');
 
   useEffect(() => {
     track(EV.paywallViewed);
     loadOfferings();
   }, [loadOfferings]);
 
-  const pkg = packages[0] ?? null;
+  const monthly = findPackage(packages, 'MONTHLY');
+  const annual = findPackage(packages, 'ANNUAL');
+  // Repli en cascade : si RevenueCat sert des identifiants personnalisés, aucun
+  // des deux types attendus n'existe — mieux vaut alors la première offre venue
+  // qu'un paywall sans prix.
+  const pkg =
+    (plan === 'ANNUAL' ? annual : monthly) ??
+    monthly ??
+    annual ??
+    packages[0] ??
+    null;
+  const period = periodLabel(pkg);
   const priceLabel = pkg?.product.priceString ?? '3,99 €';
   const trialLabel = freeTrialLabel(pkg?.product.introPrice ?? null);
 
   // Une offre qui ne se résout pas affiche un paywall sans prix ni durée
   // d'essai : l'utilisateur ne peut rien acheter et repart. Invisible jusqu'ici,
   // et un candidat sérieux pour une part des abandons.
+  //
+  // Dépendances sur l'IDENTIFIANT du package et non sur l'objet : RevenueCat en
+  // renvoie une nouvelle instance à chaque lecture, ce qui doublait l'événement.
   useEffect(() => {
     track(EV.paywallOfferLoaded, {
       has_package: pkg !== null,
+      plan: pkg?.packageType ?? null,
       price: pkg?.product.priceString ?? null,
+      period: period.long,
       trial: trialLabel,
     });
-  }, [pkg, trialLabel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pkg?.identifier, period.long, trialLabel]);
 
   const onStart = async () => {
     setError(null);
-    track(EV.paywallStartTapped, { has_package: pkg !== null });
+    track(EV.paywallStartTapped, {
+      has_package: pkg !== null,
+      plan: pkg?.packageType ?? null,
+      trial: trialLabel,
+    });
     if (!pkg) {
       setError('Offre indisponible pour le moment. Réessaie dans un instant.');
       track(EV.paywallPurchaseFailed, { reason: 'no_package' });
@@ -103,8 +159,12 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
     // `message` est le libellé remonté par RevenueCat/StoreKit. Il distingue une
     // annulation volontaire d'une carte refusée ou d'un StoreKit indisponible —
     // trois causes très différentes, qu'on confondait toutes en « il n'a pas pris ».
+    //
+    // `||` et non `??` : une annulation volontaire remonte une chaîne VIDE, que
+    // `??` laisse passer telle quelle — on enregistrait alors `reason: ''`.
     track(r.ok ? EV.paywallPurchaseOk : EV.paywallPurchaseFailed, {
-      reason: r.ok ? undefined : r.message ?? 'unknown',
+      reason: r.ok ? undefined : r.message || 'user_cancelled_or_unknown',
+      plan: pkg.packageType,
     });
   };
 
@@ -115,6 +175,12 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
     const r = await restore();
     setBusy(false);
     if (!r.ok && r.message) setError(r.message);
+    // Sans ce résultat, on a vu quelqu'un taper neuf fois en cinq secondes sans
+    // savoir ce que l'app lui répondait à chaque fois.
+    track(EV.paywallRestoreResult, {
+      ok: r.ok,
+      reason: r.ok ? undefined : r.message || 'unknown',
+    });
   };
 
   return (
@@ -137,14 +203,45 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
 
         <View style={styles.offer}>
           <Text style={styles.offerBig}>
-            {trialLabel ?? `${priceLabel}/MOIS`}
+            {trialLabel ?? `${priceLabel}/${period.short}`}
           </Text>
           <Text style={styles.offerSub}>
             {trialLabel
-              ? `puis ${priceLabel}/mois · annulable à tout moment`
-              : 'abonnement · annulable à tout moment'}
+              ? `puis ${priceLabel}/${period.long} · annulable à tout moment`
+              : `${priceLabel}/${period.long} · annulable à tout moment`}
           </Text>
         </View>
+
+        {/* Le choix ne s'affiche que si les deux offres existent réellement.
+            Un sélecteur à une seule branche n'est qu'un bouton mort de plus. */}
+        {monthly && annual ? (
+          <View style={styles.plans}>
+            {([
+              ['MONTHLY', monthly, 'MENSUEL', 'mois'],
+              ['ANNUAL', annual, 'ANNUEL', 'an'],
+            ] as const).map(([type, p, title, unit]) => {
+              const on = plan === type;
+              return (
+                <Pressable
+                  key={type}
+                  style={[styles.plan, on && styles.planOn]}
+                  disabled={busy}
+                  onPress={() => {
+                    setPlan(type);
+                    track(EV.paywallPlanSelected, { plan: type });
+                  }}
+                >
+                  <Text style={[styles.planTitle, on && styles.planTitleOn]}>
+                    {title}
+                  </Text>
+                  <Text style={styles.planPrice}>
+                    {p.product.priceString}/{unit}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
 
         {/* A signed-in user on the paywall has an account but no subscription.
             Without a word of explanation the screen just reappears and reads as
@@ -190,8 +287,8 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
 
         <Text style={styles.legal}>
           {trialLabel
-            ? `Essai gratuit de ${trialLabel.toLowerCase()}. Sans annulation au moins 24 h avant la fin, l'abonnement se renouvelle automatiquement à ${priceLabel}/mois. `
-            : `Abonnement mensuel à ${priceLabel}, renouvelé automatiquement sauf annulation au moins 24 h avant la fin de la période. `}
+            ? `Essai gratuit de ${trialLabel.toLowerCase()}. Sans annulation au moins 24 h avant la fin, l'abonnement se renouvelle automatiquement à ${priceLabel}/${period.long}. `
+            : `Abonnement à ${priceLabel}/${period.long}, renouvelé automatiquement sauf annulation au moins 24 h avant la fin de la période. `}
           Gère ou annule l'abonnement dans les réglages de ton compte Apple.
         </Text>
 
@@ -283,6 +380,30 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 12,
     marginTop: 6,
+  },
+  plans: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+  plan: {
+    flex: 1,
+    backgroundColor: C.bgSoft,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: C.segmentEmpty,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  planOn: { borderColor: C.segmentFull },
+  planTitle: {
+    color: C.textDim,
+    fontFamily: FONTS.label,
+    letterSpacing: 1.5,
+    fontSize: 12,
+  },
+  planTitleOn: { color: C.segmentFull },
+  planPrice: {
+    color: C.text,
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    marginTop: 4,
   },
   accountNote: {
     color: C.segmentFull,
