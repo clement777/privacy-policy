@@ -21,6 +21,7 @@ import {
   writeSharedSnapshot,
 } from '../native/appGroupBridge';
 import { updateAndroidWidgets } from '../native/androidWidget';
+import { currentLocale } from '../i18n';
 import {
   DEFAULT_WIDGET_SETTINGS,
   WidgetSettings,
@@ -309,6 +310,7 @@ export const useHydration = create<HydraState>()(
           // synchronisation — y compris juste après un achat, puisque le store
           // d'abonnement déclenche un _sync en changeant d'état.
           pro: useSubscription.getState().status === 'active',
+          lang: currentLocale(),
         });
         await reloadWidgetTimelines();
         await updateAndroidWidgets(events, profile, widget);

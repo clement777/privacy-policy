@@ -12,32 +12,32 @@ import {
 import { C, FONTS, RADIUS } from '../theme/colors';
 import { HydrationState } from '../engine/hydrationEngine';
 import { LockWidget, SmallWidget } from './WidgetMocks';
+import { StringKey, useT } from '../i18n';
 
 export type GuideTarget = 'lock' | 'home';
 
-const STEPS: Record<GuideTarget, { title: string; steps: string[] }> = {
+const STEPS: Record<GuideTarget, { title: StringKey; steps: StringKey[] }> = {
   lock: {
-    title: 'AJOUTER À L\u2019ÉCRAN VERROUILLÉ',
+    title: 'guide.lock.title',
     steps: [
-      'Verrouille ton iPhone, puis appuie longuement sur l\u2019écran verrouillé.',
-      'Touche « Personnaliser », puis « Écran verrouillé ».',
-      'Touche la zone sous l\u2019heure, puis « + Ajouter des widgets ».',
-      'Cherche « HYDRA » dans la liste et sélectionne-le.',
-      'Touche « OK » : la barre de vie apparaît sous l\u2019heure.',
+      'guide.lock.1',
+      'guide.lock.2',
+      'guide.lock.3',
+      'guide.lock.4',
+      'guide.lock.5',
     ],
   },
   home: {
-    title: 'AJOUTER À L\u2019ÉCRAN D\u2019ACCUEIL',
+    title: 'guide.home.title',
     steps: [
-      'Appuie longuement sur une zone vide de l\u2019écran d\u2019accueil.',
-      'Touche le « + » en haut à gauche.',
-      'Cherche « HYDRA » dans la liste des widgets.',
-      'Choisis le format (carré 2×2 ou bandeau 4×2).',
-      'Touche « Ajouter le widget », puis « OK ».',
+      'guide.home.1',
+      'guide.home.2',
+      'guide.home.3',
+      'guide.home.4',
+      'guide.home.5',
     ],
   },
 };
-
 export function WidgetAddGuide({
   visible,
   target,
@@ -91,6 +91,7 @@ export function WidgetAddGuide({
     return () => loop.stop();
   }, [visible, reduceMotion, pulse]);
 
+  const tr = useT();
   const conf = STEPS[target];
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
   const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
@@ -105,7 +106,7 @@ export function WidgetAddGuide({
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 28 }}>
-            <Text style={styles.title}>{conf.title}</Text>
+            <Text style={styles.title}>{tr(conf.title)}</Text>
 
             <View style={styles.stage}>
               {target === 'lock' ? (
@@ -124,22 +125,20 @@ export function WidgetAddGuide({
             </View>
 
             <View style={styles.steps}>
-              {conf.steps.map((s, i) => (
-                <View key={i} style={styles.stepRow}>
+              {conf.steps.map((key, i) => (
+                <View key={key} style={styles.stepRow}>
                   <View style={styles.stepNum}>
                     <Text style={styles.stepNumTxt}>{i + 1}</Text>
                   </View>
-                  <Text style={styles.stepTxt}>{s}</Text>
+                  <Text style={styles.stepTxt}>{tr(key)}</Text>
                 </View>
               ))}
             </View>
 
-            <Text style={styles.note}>
-              {'iOS ne permet pas d\u2019ajouter un widget automatiquement — ces étapes se font une seule fois, à la main. Ensuite HYDRA se met à jour tout seul.'}
-            </Text>
+            <Text style={styles.note}>{tr('guide.note')}</Text>
 
             <Pressable style={styles.closeBtn} onPress={onClose}>
-              <Text style={styles.closeTxt}>{'J\u2019AI COMPRIS'}</Text>
+              <Text style={styles.closeTxt}>{tr('common.gotItLong')}</Text>
             </Pressable>
           </ScrollView>
         </View>

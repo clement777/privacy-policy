@@ -22,12 +22,14 @@ import {
   activeSportSessions,
   formatSportRemaining,
 } from '../util/sport';
+import { useT } from '../i18n';
 
 const DISPLAY_FORECAST_MS = 24 * 3600_000;
 
 export function HomeScreen() {
   const { events, profile, widget, logPreset, logWater, logSport, undo } =
     useHydration();
+  const tr = useT();
   const [nowMs, setNowMs] = useState(Date.now());
   const [toast, setToast] = useState<string | null>(null);
   const [sportOpen, setSportOpen] = useState(false);
@@ -70,8 +72,8 @@ export function HomeScreen() {
     [events, stateNow, state.dailyNeedMl]
   );
   const streakLabel =
-    streak > 0 ? `🌊 VAGUE ${streak}J` : '🌊 LANCE TA VAGUE';
-  const streakHint = vagueHint(state.dailyNeedMl);
+    streak > 0 ? tr('home.streak', { n: streak }) : tr('home.streakEmpty');
+  const streakHint = vagueHint(state.dailyNeedMl, tr);
 
   const sportSessions = useMemo(
     () => activeSportSessions(events, stateNow, profile),
@@ -111,7 +113,7 @@ export function HomeScreen() {
   const onSportBlocked = (remainingSec: number) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     showToast(
-      `SÉANCE EN COURS · termine dans ${formatSportRemaining(remainingSec)}`
+      tr('home.sessionBlocked', { time: formatSportRemaining(remainingSec) })
     );
   };
 
@@ -129,7 +131,7 @@ export function HomeScreen() {
       onSportBlocked(r.remainingSec);
       return;
     }
-    showToast(`SÉANCE DÉMARRÉE · ${durationMin} min · sueur en cours`);
+    showToast(tr('home.sessionStarted', { min: durationMin }));
   };
 
   return (
@@ -140,7 +142,7 @@ export function HomeScreen() {
             <Image
               source={require('../../assets/logo.png')}
               style={styles.brandLogo}
-              accessibilityLabel="Logo HYDRA"
+              accessibilityLabel={tr('home.logoA11y')}
             />
             <Text style={styles.brand}>HYDRA</Text>
           </View>
@@ -149,7 +151,7 @@ export function HomeScreen() {
             <InfoTip
               title={streakHint.title}
               body={streakHint.body}
-              accessibilityLabel="Détails de ta vague"
+              accessibilityLabel={tr('home.streakA11y')}
             />
           </View>
         </View>
@@ -163,7 +165,7 @@ export function HomeScreen() {
           />
 
           <View style={styles.countdownRow}>
-            <Text style={styles.cdLabel}>ROUGE DANS</Text>
+            <Text style={styles.cdLabel}>{tr('home.redIn')}</Text>
             <Text style={styles.cdVal}>
               {formatCountdownPrecise(redAt, nowMs)}
             </Text>
@@ -171,15 +173,13 @@ export function HomeScreen() {
 
           {state.saturated ? (
             <View style={styles.satBanner}>
+              <Text style={styles.satText}>{tr('home.saturated')}</Text>
               <Text style={styles.satText}>
-                SATURÉ · ton corps ne peut pas absorber plus vite.
-              </Text>
-              <Text style={styles.satText}>
-                Attends encore{' '}
-                <Text style={styles.satTimer}>
-                  {recoverAt ? formatCountdownPrecise(recoverAt, nowMs) : '—'}
-                </Text>{' '}
-                avant de reboire de l'eau.
+                {tr('home.saturatedWait', {
+                  timer: recoverAt
+                    ? formatCountdownPrecise(recoverAt, nowMs)
+                    : '—',
+                })}
               </Text>
             </View>
           ) : null}
@@ -187,7 +187,7 @@ export function HomeScreen() {
           {toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
           <LogButton
-            label="EAU"
+            label={tr('home.water')}
             sub={`+${widget.defaultWaterMl} ml`}
             color={C.segmentFull}
             onPress={drinkWater}
@@ -195,48 +195,47 @@ export function HomeScreen() {
 
           <View style={styles.grid}>
             <LogButton
-              label="ALCOOL LÉGER"
-              sub="2–8°"
+              label={tr('home.alcoholLight')}
+              sub={tr('home.alcoholLightSub')}
               color={C.amber}
               onPress={() => drink('alcohol_light')}
             />
             <LogButton
-              label="ALCOOL MOYEN"
-              sub="9–22°"
+              label={tr('home.alcoholMedium')}
+              sub={tr('home.alcoholMediumSub')}
               color={C.amber}
               onPress={() => drink('alcohol_medium')}
             />
           </View>
 
           <LogButton
-            label="ALCOOL FORT"
-            sub="30–45°  spiritueux"
+            label={tr('home.alcoholStrong')}
+            sub={tr('home.alcoholStrongSub')}
             color={C.red}
             onPress={() => drink('alcohol_strong')}
           />
 
           <LogButton
-            label="SPORT"
-            sub={
-              sportActive
-                ? 'séance en cours'
-                : 'modéré ou intense · durée'
-            }
+            label={tr('home.sport')}
+            sub={tr(sportActive ? 'home.sportRunning' : 'home.sportIdle')}
             color={sportActive ? C.textDim : C.text}
             onPress={openSport}
           />
 
           <LogButton
-            label="ANNULER LE DERNIER AJOUT"
-            sub="retire eau, alcool ou sport"
+            label={tr('home.undo')}
+            sub={tr('home.undoSub')}
             color={C.textDim}
             onPress={() => undo()}
           />
 
           <Text style={styles.footHint}>
-            Besoin quotidien : {Math.round(state.dailyNeedMl)} mL (
-            {profile.weightKg} kg × 32) · absorbé cette heure{' '}
-            {Math.round(state.absorbedLastHourMl)}/{state.absorbCapMl} mL
+            {tr('home.footHint', {
+              need: Math.round(state.dailyNeedMl),
+              kg: profile.weightKg,
+              used: Math.round(state.absorbedLastHourMl),
+              cap: state.absorbCapMl,
+            })}
           </Text>
         </View>
       </ScrollView>

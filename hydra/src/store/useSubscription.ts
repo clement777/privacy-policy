@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { t } from '../i18n';
 import type {
   CustomerInfo,
   PurchasesOffering,
@@ -82,47 +83,23 @@ function describe(code: string): { outcome: PurchaseOutcome; message: string } {
       // Volontaire : aucun message, ce serait reprocher un choix.
       return { outcome: 'cancelled', message: '' };
     case RC_PAYMENT_PENDING:
-      return {
-        outcome: 'pending',
-        message:
-          'Achat en attente de validation (ta banque, ou « Demander à acheter »). Rien à refaire : HYDRA se débloque dès que c\'est confirmé.',
-      };
+      return { outcome: 'pending', message: t('purchase.pending') };
     case RC_ALREADY_PURCHASED:
-      return {
-        outcome: 'error',
-        message:
-          'Tu as déjà cet abonnement. Utilise « Restaurer mes achats » juste en dessous.',
-      };
+      return { outcome: 'error', message: t('purchase.alreadyOwned') };
     case RC_NETWORK:
     case RC_OFFLINE:
-      return {
-        outcome: 'error',
-        message: 'Connexion perdue. Vérifie ton réseau et réessaie.',
-      };
+      return { outcome: 'error', message: t('purchase.network') };
     case RC_STORE_PROBLEM:
-      return {
-        outcome: 'error',
-        message: 'L\'App Store ne répond pas pour le moment. Réessaie dans un instant.',
-      };
+      return { outcome: 'error', message: t('purchase.storeProblem') };
     case RC_NOT_ALLOWED:
-      return {
-        outcome: 'error',
-        message:
-          'Les achats sont bloqués sur cet appareil (restrictions du Temps d\'écran).',
-      };
+      return { outcome: 'error', message: t('purchase.notAllowed') };
     case RC_PRODUCT_UNAVAILABLE:
-      return {
-        outcome: 'error',
-        message: 'Cette offre n\'est pas disponible sur ton compte App Store.',
-      };
+      return { outcome: 'error', message: t('purchase.productUnavailable') };
     default:
       // Le libellé anglais de StoreKit n'est volontairement PAS affiché : il
       // ne veut rien dire pour l'utilisateur. Il ne sert qu'à la mesure, où le
       // code numérique le remplace avantageusement.
-      return {
-        outcome: 'error',
-        message: 'L\'achat n\'a pas abouti. Réessaie dans un instant.',
-      };
+      return { outcome: 'error', message: t('purchase.failed') };
   }
 }
 
@@ -210,7 +187,12 @@ export const useSubscription = create<SubState>((set, get) => ({
 
   async purchase(pkg) {
     if (!Purchases) {
-      return { ok: false, outcome: 'error', code: '', message: 'Achat indisponible ici.' };
+      return {
+        ok: false,
+        outcome: 'error',
+        code: '',
+        message: t('purchase.unavailable'),
+      };
     }
     try {
       const { customerInfo } = await Purchases.purchasePackage(pkg);
@@ -231,7 +213,7 @@ export const useSubscription = create<SubState>((set, get) => ({
         ok: false,
         outcome: 'error',
         code: '',
-        message: 'Restauration indisponible ici.',
+        message: t('purchase.restoreUnavailable'),
       };
     }
     try {
@@ -244,7 +226,7 @@ export const useSubscription = create<SubState>((set, get) => ({
             ok: false,
             outcome: 'error',
             code: 'no_entitlement',
-            message: 'Aucun abonnement actif sur ce compte Apple.',
+            message: t('purchase.noEntitlement'),
           };
     } catch (e: unknown) {
       const err = e as { code?: string };

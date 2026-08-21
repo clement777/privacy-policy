@@ -8,6 +8,7 @@ import {
   sweatRateMlPerHour,
   UserProfile,
 } from '../engine/hydrationEngine';
+import type { StringKey } from '../i18n';
 
 export interface ActiveSportSession {
   intensity: SportIntensity;
@@ -66,10 +67,12 @@ export function formatSportRemaining(totalSec: number): string {
   return `${s}s`;
 }
 
-export function intensityLabel(i: SportIntensity): string {
-  if (i === 'intense') return 'INTENSE';
-  if (i === 'light') return 'LÉGER';
-  return 'MODÉRÉ';
+// Renvoie une CLÉ de traduction, pas un libellé : ce module est utilisé par des
+// composants, qui doivent pouvoir re-rendre quand la langue change.
+export function intensityKey(i: SportIntensity): StringKey {
+  if (i === 'intense') return 'sport.intense';
+  if (i === 'light') return 'sport.light';
+  return 'sport.moderate';
 }
 
 export function hasActiveSportSession(

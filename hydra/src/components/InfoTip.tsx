@@ -7,6 +7,7 @@ import {
   Text,
 } from 'react-native';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { useT } from '../i18n';
 
 interface Props {
   title: string;
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function InfoTip({ title, body, accessibilityLabel }: Props) {
+  const tr = useT();
   const [open, setOpen] = useState(false);
 
   const show = () => {
@@ -28,7 +30,9 @@ export function InfoTip({ title, body, accessibilityLabel }: Props) {
         onPress={show}
         hitSlop={10}
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel ?? `Détails : ${title}`}
+        accessibilityLabel={
+          accessibilityLabel ?? tr('common.details', { label: title })
+        }
         style={styles.btn}
       >
         <Text style={styles.btnTxt}>i</Text>
@@ -48,7 +52,7 @@ export function InfoTip({ title, body, accessibilityLabel }: Props) {
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{body}</Text>
             <Pressable style={styles.okBtn} onPress={() => setOpen(false)}>
-              <Text style={styles.okTxt}>COMPRIS</Text>
+              <Text style={styles.okTxt}>{tr('common.gotIt')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>

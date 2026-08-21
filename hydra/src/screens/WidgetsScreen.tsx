@@ -27,21 +27,23 @@ import { LockWidget, MediumWidget, SmallWidget } from '../components/WidgetMocks
 import { WidgetAddGuide, GuideTarget } from '../components/WidgetAddGuide';
 import { SourcesSheet } from '../components/SourcesSheet';
 import { WATER_CONTAINERS, WidgetFormat } from '../store/widgetSettings';
+import { StringKey, useT } from '../i18n';
+import { LanguagePicker } from '../components/LanguagePicker';
 
 type PreviewMode = 'live' | Zone;
 
-const STATE_CHIPS: { key: PreviewMode; label: string }[] = [
-  { key: 'live', label: 'DIRECT' },
-  { key: 'green', label: 'HYDRATÉ' },
-  { key: 'amber', label: 'TU SÈCHES' },
-  { key: 'red', label: 'CRITIQUE' },
-  { key: 'poison', label: 'EMPOISONNÉ' },
+const STATE_CHIPS: { key: PreviewMode; label: StringKey }[] = [
+  { key: 'live', label: 'widgets.state.live' },
+  { key: 'green', label: 'zone.green' },
+  { key: 'amber', label: 'zone.amber' },
+  { key: 'red', label: 'zone.red' },
+  { key: 'poison', label: 'zone.poison' },
 ];
 
-const FORMAT_CHIPS: { key: WidgetFormat; label: string }[] = [
-  { key: 'lock', label: 'VERROUILLAGE' },
-  { key: 'small', label: 'CARRÉ 2×2' },
-  { key: 'medium', label: 'BANDEAU 4×2' },
+const FORMAT_CHIPS: { key: WidgetFormat; label: StringKey }[] = [
+  { key: 'lock', label: 'widgets.format.lock' },
+  { key: 'small', label: 'widgets.format.small' },
+  { key: 'medium', label: 'widgets.format.medium' },
 ];
 
 const NEED = 2240;
@@ -112,6 +114,7 @@ export function WidgetsScreen() {
   } = useHydration();
 
   const { user, signOut, deleteAccount } = useAuth();
+  const tr = useT();
   const [mode, setMode] = useState<PreviewMode>('live');
   const [guide, setGuide] = useState<GuideTarget | null>(null);
 
@@ -158,32 +161,24 @@ export function WidgetsScreen() {
   };
 
   const confirmRestartOnboarding = () => {
-    Alert.alert(
-      'Refaire le questionnaire',
-      'Tu vas repasser par la configuration guidée (poids, sexe, sommeil, environnement, contenant). Tes données actuelles restent enregistrées.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Continuer', onPress: () => restartOnboarding() },
-      ]
-    );
+    Alert.alert(tr('widgets.restartTitle'), tr('widgets.restartBody'), [
+      { text: tr('common.cancel'), style: 'cancel' },
+      { text: tr('common.continue'), onPress: () => restartOnboarding() },
+    ]);
   };
 
   const confirmDelete = () => {
-    Alert.alert(
-      'Supprimer le compte',
-      'Toutes tes données (profil, historique) seront définitivement effacées. Cette action est irréversible.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            const r = await deleteAccount();
-            if (!r.ok) Alert.alert('Erreur', r.message);
-          },
+    Alert.alert(tr('widgets.deleteTitle'), tr('widgets.deleteBody'), [
+      { text: tr('common.cancel'), style: 'cancel' },
+      {
+        text: tr('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          const r = await deleteAccount();
+          if (!r.ok) Alert.alert(tr('common.error'), r.message);
         },
-      ]
-    );
+      },
+    ]);
   };
   const [toast, setToast] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -205,7 +200,7 @@ export function WidgetsScreen() {
   const doRefresh = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     await refreshWidget();
-    setToast('Widget rafraîchi.');
+    setToast(tr('widgets.refreshed'));
     setTimeout(() => setToast(null), 2000);
   };
 
@@ -243,19 +238,16 @@ export function WidgetsScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
-        <Text style={styles.title}>WIDGETS</Text>
-        <Text style={styles.subtitle}>
-          Le produit, c'est le widget. Cet écran est son poste de pilotage :
-          aperçu, ajout, et les réglages qui l'alimentent.
-        </Text>
+        <Text style={styles.title}>{tr('widgets.title')}</Text>
+        <Text style={styles.subtitle}>{tr('widgets.subtitle')}</Text>
 
         {/* ————— APERÇU ————— */}
-        <Text style={styles.section}>APERÇU</Text>
+        <Text style={styles.section}>{tr('widgets.preview')}</Text>
         <View style={styles.chipRow}>
           {FORMAT_CHIPS.map((c) => (
             <Chip
               key={c.key}
-              label={c.label}
+              label={tr(c.label)}
               on={widget.preferredFormat === c.key}
               onPress={() => updateWidget({ preferredFormat: c.key })}
             />
@@ -265,7 +257,7 @@ export function WidgetsScreen() {
           {STATE_CHIPS.map((c) => (
             <Chip
               key={c.key}
-              label={c.label}
+              label={tr(c.label)}
               on={mode === c.key}
               onPress={() => setMode(c.key)}
             />
@@ -292,13 +284,13 @@ export function WidgetsScreen() {
         </View>
 
         {/* ————— AJOUT ————— */}
-        <Text style={styles.section}>AJOUTER LE WIDGET</Text>
+        <Text style={styles.section}>{tr('widgets.add')}</Text>
         <Pressable style={styles.action} onPress={() => setGuide('lock')}>
-          <Text style={styles.actionTxt}>AJOUTER À L'ÉCRAN VERROUILLÉ</Text>
+          <Text style={styles.actionTxt}>{tr('widgets.addLock')}</Text>
           <Text style={styles.actionArrow}>›</Text>
         </Pressable>
         <Pressable style={styles.action} onPress={() => setGuide('home')}>
-          <Text style={styles.actionTxt}>AJOUTER À L'ÉCRAN D'ACCUEIL</Text>
+          <Text style={styles.actionTxt}>{tr('widgets.addHome')}</Text>
           <Text style={styles.actionArrow}>›</Text>
         </Pressable>
         <Pressable
@@ -306,15 +298,15 @@ export function WidgetsScreen() {
           onPress={doRefresh}
         >
           <Text style={[styles.actionTxt, { color: C.segmentFull }]}>
-            RAFRAÎCHIR LE WIDGET
+            {tr('widgets.refresh')}
           </Text>
           <Text style={[styles.actionArrow, { color: C.segmentFull }]}>⟳</Text>
         </Pressable>
         {toast ? <Text style={styles.toast}>{toast}</Text> : null}
 
         {/* ————— RÉGLAGES WIDGET ————— */}
-        <Text style={styles.section}>RÉGLAGES WIDGET</Text>
-        <Row label="BOUTONS ALCOOL (BANDEAU)">
+        <Text style={styles.section}>{tr('widgets.settings')}</Text>
+        <Row label={tr('widgets.alcoholButtons')}>
           <View style={{ alignItems: 'flex-end' }}>
             <Switch
               value={widget.showAlcoholOnMedium}
@@ -322,7 +314,7 @@ export function WidgetsScreen() {
             />
           </View>
         </Row>
-        <Text style={styles.miniLabel}>CONTENANT EAU PAR DÉFAUT</Text>
+        <Text style={styles.miniLabel}>{tr('widgets.defaultContainer')}</Text>
         <View style={styles.chipRow}>
           {WATER_CONTAINERS.map((c) => (
             <Chip
@@ -335,8 +327,8 @@ export function WidgetsScreen() {
           <Chip
             label={
               customWaterMode && customWaterMl
-                ? `PERSO ${customWaterMl} mL`
-                : 'PERSONNALISÉ'
+                ? tr('widgets.customShort', { ml: customWaterMl })
+                : tr('common.custom')
             }
             on={customWaterMode}
             onPress={selectCustomWater}
@@ -349,7 +341,7 @@ export function WidgetsScreen() {
               keyboardType="numeric"
               value={customWaterMl}
               onChangeText={onCustomWaterChange}
-              placeholder="ex. 400"
+              placeholder={tr('onb.water.placeholder')}
               placeholderTextColor={C.textDim}
               maxLength={4}
             />
@@ -358,9 +350,9 @@ export function WidgetsScreen() {
         )}
 
         {/* ————— PROFIL ————— */}
-        <Text style={styles.section}>PROFIL (ALIMENTE LE WIDGET)</Text>
-        <Row label="POIDS (kg)">{num('weightKg', 30, 200)}</Row>
-        <Row label="SEXE">
+        <Text style={styles.section}>{tr('widgets.profile')}</Text>
+        <Row label={tr('widgets.weight')}>{num('weightKg', 30, 200)}</Row>
+        <Row label={tr('widgets.sex')}>
           <View style={styles.pill}>
             {(['male', 'female'] as const).map((s) => (
               <Pressable
@@ -369,33 +361,38 @@ export function WidgetsScreen() {
                 onPress={() => updateProfile({ sex: s })}
               >
                 <Text style={[styles.pillTxt, profile.sex === s && { color: C.bg }]}>
-                  {s === 'male' ? 'H' : 'F'}
+                  {tr(s === 'male' ? 'common.maleShort' : 'common.femaleShort')}
                 </Text>
               </Pressable>
             ))}
           </View>
         </Row>
-        <Row label="SOMMEIL DÉBUT">{sleepInput('sleepStartHour')}</Row>
-        <Row label="SOMMEIL FIN">{sleepInput('sleepEndHour')}</Row>
-        <Row label="HEURES ÉVEIL (AUTO)">
-          <Text style={styles.readonly}>{profile.awakeHours} h</Text>
-        </Row>
-        <Row label="TEMP AMBIANTE °C">{num('ambientTempC', -20, 50)}</Row>
-        <Row label="HUMIDITÉ %">{num('relativeHumidityPct', 0, 100)}</Row>
-        <Row label="ALTITUDE (m)">{num('altitudeM', 0, 8000, 100)}</Row>
-        <Row label="OBJECTIF">
+        <Row label={tr('widgets.sleepStart')}>{sleepInput('sleepStartHour')}</Row>
+        <Row label={tr('widgets.sleepEnd')}>{sleepInput('sleepEndHour')}</Row>
+        <Row label={tr('widgets.awakeAuto')}>
           <Text style={styles.readonly}>
-            {Math.round(need)} mL / jour ({profile.weightKg} × 32)
+            {tr('widgets.hours', { h: profile.awakeHours })}
+          </Text>
+        </Row>
+        <Row label={tr('widgets.temp')}>{num('ambientTempC', -20, 50)}</Row>
+        <Row label={tr('widgets.humidity')}>{num('relativeHumidityPct', 0, 100)}</Row>
+        <Row label={tr('widgets.altitude')}>{num('altitudeM', 0, 8000, 100)}</Row>
+        <Row label={tr('widgets.goal')}>
+          <Text style={styles.readonly}>
+            {tr('widgets.goalValue', {
+              ml: Math.round(need),
+              kg: profile.weightKg,
+            })}
           </Text>
         </Row>
         <Pressable style={styles.action} onPress={confirmRestartOnboarding}>
-          <Text style={styles.actionTxt}>REFAIRE LE QUESTIONNAIRE</Text>
+          <Text style={styles.actionTxt}>{tr('widgets.restart')}</Text>
           <Text style={styles.actionArrow}>›</Text>
         </Pressable>
 
         {/* ————— NOTIFS ————— */}
-        <Text style={styles.section}>NOTIFICATIONS</Text>
-        <Row label="RAPPELS PAR VERRE">
+        <Text style={styles.section}>{tr('widgets.notifications')}</Text>
+        <Row label={tr('widgets.glassReminders')}>
           <View style={{ alignItems: 'flex-end' }}>
             <Switch
               value={glassRemindersOn}
@@ -407,38 +404,38 @@ export function WidgetsScreen() {
           </View>
         </Row>
         <Text style={styles.miniLabel}>
-          Un rappel programmé pour chaque verre encore nécessaire aujourd'hui,
-          étalé jusqu'à ton coucher ({profile.sleepStartHour} h). Les alertes
-          zone ambre/rouge restent actives dans tous les cas.
+          {tr('widgets.remindersHint', { h: profile.sleepStartHour })}
+        </Text>
+
+        {/* ————— LANGUE ————— */}
+        <Text style={styles.section}>{tr('widgets.language')}</Text>
+        <LanguagePicker compact />
+        <Text style={[styles.miniLabel, { marginTop: 10 }]}>
+          {tr('widgets.languageHint')}
         </Text>
 
         {/* ————— COMPTE ————— */}
-        <Text style={styles.section}>COMPTE</Text>
-        <Row label="CONNECTÉ">
+        <Text style={styles.section}>{tr('widgets.account')}</Text>
+        <Row label={tr('widgets.signedIn')}>
           <Text style={styles.readonly} numberOfLines={1}>
             {user?.email ?? 'Apple ID'}
           </Text>
         </Row>
         <Pressable style={styles.acctBtn} onPress={() => signOut()}>
-          <Text style={styles.acctBtnTxt}>SE DÉCONNECTER</Text>
+          <Text style={styles.acctBtnTxt}>{tr('widgets.signOut')}</Text>
         </Pressable>
         <Pressable style={styles.acctDanger} onPress={confirmDelete}>
-          <Text style={styles.acctDangerTxt}>SUPPRIMER LE COMPTE</Text>
+          <Text style={styles.acctDangerTxt}>{tr('widgets.deleteAccount')}</Text>
         </Pressable>
 
         {/* ————— SCIENCE ————— */}
-        <Text style={styles.section}>SCIENCE</Text>
+        <Text style={styles.section}>{tr('widgets.science')}</Text>
         <Pressable style={styles.action} onPress={() => setSourcesOpen(true)}>
-          <Text style={styles.actionTxt}>SOURCES SCIENTIFIQUES</Text>
+          <Text style={styles.actionTxt}>{tr('widgets.sources')}</Text>
           <Text style={styles.actionArrow}>›</Text>
         </Pressable>
 
-        <Text style={styles.disclaimer}>
-          App grand public à but ludique et informatif. Ce n'est pas un
-          dispositif médical. Les coefficients sont des moyennes de population.
-          Consulte un professionnel de santé pour tout besoin d'hydratation
-          spécifique.
-        </Text>
+        <Text style={styles.disclaimer}>{tr('widgets.disclaimer')}</Text>
       </ScrollView>
 
       <WidgetAddGuide

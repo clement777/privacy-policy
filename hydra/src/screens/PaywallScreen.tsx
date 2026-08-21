@@ -15,16 +15,19 @@ import { useAuth } from '../store/useAuth';
 import { track, EV } from '../analytics/analytics';
 import { SourcesSheet } from '../components/SourcesSheet';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { StringKey, useT } from '../i18n';
+
+type Translate = (key: StringKey, params?: Record<string, string | number>) => string;
 
 // Standard Apple EULA (used unless you host your own Terms of Use).
 const TERMS_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 const PRIVACY_URL = 'https://hydra-landing-sooty.vercel.app/privacy.html';
 
-const VALUE_PROPS = [
-  ['🩸', 'Ta barre de vie', 'Une barre qui se vide en temps réel. Bois pour la remplir.'],
-  ['☠️', 'L’alcool est un poison', 'Chaque verre accélère ta déshydratation. Vois l’impact réel.'],
-  ['🔒', 'Widget écran verrouillé', 'Ton hydratation en permanence sous les yeux, sans ouvrir l’app.'],
-  ['📊', 'Moteur physiologique', 'Calculs basés sur ton corps et la vraie science, pas des points au hasard.'],
+const VALUE_PROPS: { icon: string; title: StringKey; desc: StringKey }[] = [
+  { icon: '🩸', title: 'pay.prop1.title', desc: 'pay.prop1.desc' },
+  { icon: '☠️', title: 'pay.prop2.title', desc: 'pay.prop2.desc' },
+  { icon: '🔒', title: 'pay.prop3.title', desc: 'pay.prop3.desc' },
+  { icon: '📊', title: 'pay.prop4.title', desc: 'pay.prop4.desc' },
 ];
 
 // The introductory offer as StoreKit actually reports it. We must never promise
@@ -33,22 +36,29 @@ const VALUE_PROPS = [
 // purchase sheet didn't mention. So the offer copy is derived from the product,
 // never hard-coded — if the introductory offer is missing or misconfigured in
 // App Store Connect, the paywall degrades to plain pricing instead of lying.
-function freeTrialLabel(intro: {
-  price: number;
-  periodUnit: string;
-  periodNumberOfUnits: number;
-} | null): string | null {
+function freeTrialLabel(
+  intro: {
+    price: number;
+    periodUnit: string;
+    periodNumberOfUnits: number;
+  } | null,
+  tr: Translate
+): string | null {
   if (!intro || intro.price > 0) return null;
   const n = intro.periodNumberOfUnits;
+  // `{s}` porte le pluriel dans les deux langues — français et anglais ajoutent
+  // tous deux un S. Une langue à pluriel irrégulier demanderait mieux ; aucune
+  // n'est livrée aujourd'hui, et prétendre le contraire serait du décor.
+  const s = n > 1 ? 'S' : '';
   switch (intro.periodUnit) {
     case 'DAY':
-      return `${n} JOUR${n > 1 ? 'S' : ''} GRATUIT${n > 1 ? 'S' : ''}`;
+      return tr('pay.trialDays', { n, s });
     case 'WEEK':
-      return n * 7 === 7 ? '7 JOURS GRATUITS' : `${n * 7} JOURS GRATUITS`;
+      return tr('pay.trialWeeks', { n: n * 7 });
     case 'MONTH':
-      return `${n} MOIS GRATUIT${n > 1 ? 'S' : ''}`;
+      return tr('pay.trialMonths', { n, s });
     case 'YEAR':
-      return `${n} AN${n > 1 ? 'S' : ''} GRATUIT${n > 1 ? 'S' : ''}`;
+      return tr('pay.trialYears', { n, s });
     default:
       return null;
   }
@@ -76,13 +86,13 @@ function findPackage(
 }
 
 /** L'unité de période vient du package, jamais d'une constante. */
-function periodLabel(pkg: PurchasesPackage | null): {
-  short: string;
-  long: string;
-} {
+function periodLabel(
+  pkg: PurchasesPackage | null,
+  tr: Translate
+): { short: string; long: string } {
   return pkg?.packageType === 'ANNUAL'
-    ? { short: 'AN', long: 'an' }
-    : { short: 'MOIS', long: 'mois' };
+    ? { short: tr('pay.periodYearShort'), long: tr('pay.periodYear') }
+    : { short: tr('pay.periodMonthShort'), long: tr('pay.periodMonth') };
 }
 
 interface Props {
@@ -96,6 +106,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
   const { packages, purchase, restore, loadOfferings } =
     useSubscription();
   const { signOut, status: authStatus } = useAuth();
+  const tr = useT();
   const [busy, setBusy] = useState(false);
   // Un message d'achat n'est pas toujours une erreur : un paiement en attente
   // de validation bancaire est une bonne nouvelle mal habillée. Deux tons.
@@ -123,9 +134,9 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
     annual ??
     packages[0] ??
     null;
-  const period = periodLabel(pkg);
+  const period = periodLabel(pkg, tr);
   const priceLabel = pkg?.product.priceString ?? '3,99 €';
-  const trialLabel = freeTrialLabel(pkg?.product.introPrice ?? null);
+  const trialLabel = freeTrialLabel(pkg?.product.introPrice ?? null, tr);
 
   // Une offre qui ne se résout pas affiche un paywall sans prix ni durée
   // d'essai : l'utilisateur ne peut rien acheter et repart. Invisible jusqu'ici,
@@ -152,10 +163,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
       trial: trialLabel,
     });
     if (!pkg) {
-      setMsg({
-        text: 'Offre indisponible pour le moment. Réessaie dans un instant.',
-        tone: 'error',
-      });
+      setMsg({ text: tr('pay.noOffer'), tone: 'error' });
       track(EV.paywallPurchaseFailed, { outcome: 'error', code: 'no_package' });
       return;
     }
@@ -194,15 +202,15 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.brand}>HYDRA</Text>
-        <Text style={styles.tag}>Passe le moins de temps possible à sec.</Text>
+        <Text style={styles.tag}>{tr('pay.tagline')}</Text>
 
         <View style={styles.props}>
-          {VALUE_PROPS.map(([icon, title, desc]) => (
-            <View key={title} style={styles.prop}>
-              <Text style={styles.propIcon}>{icon}</Text>
+          {VALUE_PROPS.map((p) => (
+            <View key={p.title} style={styles.prop}>
+              <Text style={styles.propIcon}>{p.icon}</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.propTitle}>{title}</Text>
-                <Text style={styles.propDesc}>{desc}</Text>
+                <Text style={styles.propTitle}>{tr(p.title)}</Text>
+                <Text style={styles.propDesc}>{tr(p.desc)}</Text>
               </View>
             </View>
           ))}
@@ -210,12 +218,14 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
 
         <View style={styles.offer}>
           <Text style={styles.offerBig}>
-            {trialLabel ?? `${priceLabel}/${period.short}`}
+            {trialLabel ??
+              tr('pay.perPeriod', { price: priceLabel, period: period.short })}
           </Text>
           <Text style={styles.offerSub}>
-            {trialLabel
-              ? `puis ${priceLabel}/${period.long} · annulable à tout moment`
-              : `${priceLabel}/${period.long} · annulable à tout moment`}
+            {tr(trialLabel ? 'pay.thenPerPeriod' : 'pay.plainPeriod', {
+              price: priceLabel,
+              period: period.long,
+            })}
           </Text>
         </View>
 
@@ -224,8 +234,8 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
         {monthly && annual ? (
           <View style={styles.plans}>
             {([
-              ['MONTHLY', monthly, 'MENSUEL', 'mois'],
-              ['ANNUAL', annual, 'ANNUEL', 'an'],
+              ['MONTHLY', monthly, 'pay.planMonthly', 'pay.periodMonth'],
+              ['ANNUAL', annual, 'pay.planAnnual', 'pay.periodYear'],
             ] as const).map(([type, p, title, unit]) => {
               const on = plan === type;
               return (
@@ -239,10 +249,10 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
                   }}
                 >
                   <Text style={[styles.planTitle, on && styles.planTitleOn]}>
-                    {title}
+                    {tr(title)}
                   </Text>
                   <Text style={styles.planPrice}>
-                    {p.product.priceString}/{unit}
+                    {p.product.priceString}/{tr(unit)}
                   </Text>
                 </Pressable>
               );
@@ -255,16 +265,10 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
             a loop — which is how two of the three people who completed the
             questionnaire on 3 Aug left, account created, trial never started. */}
         {authStatus === 'signedIn' ? (
-          <Text style={styles.accountNote}>
-            Ton compte est bien créé. Il te reste à démarrer ton essai pour
-            débloquer l'app.
-          </Text>
+          <Text style={styles.accountNote}>{tr('pay.accountNote')}</Text>
         ) : null}
 
-        <Text style={styles.access}>
-          HYDRA est une app par abonnement : l'accès complet (barre en temps
-          réel, widgets, historique) nécessite l'abonnement HYDRA Pro.
-        </Text>
+        <Text style={styles.access}>{tr('pay.access')}</Text>
 
         {msg ? (
           <Text style={msg.tone === 'info' ? styles.notice : styles.error}>
@@ -281,40 +285,47 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
             <ActivityIndicator color={C.bg} />
           ) : (
             <Text style={styles.ctaTxt}>
-              {trialLabel ? "COMMENCER L'ESSAI GRATUIT" : "S'ABONNER"}
+              {tr(trialLabel ? 'pay.ctaTrial' : 'pay.ctaSubscribe')}
             </Text>
           )}
         </Pressable>
 
         <Pressable onPress={onRestore} disabled={busy} hitSlop={8}>
-          <Text style={styles.restore}>Restaurer mes achats</Text>
+          <Text style={styles.restore}>{tr('pay.restore')}</Text>
         </Pressable>
 
         {authStatus === 'signedOut' && onRequestSignIn ? (
           <Pressable onPress={onRequestSignIn} disabled={busy} hitSlop={8}>
-            <Text style={styles.signIn}>Déjà un compte ? Se connecter</Text>
+            <Text style={styles.signIn}>{tr('pay.signIn')}</Text>
           </Pressable>
         ) : null}
 
         <Text style={styles.legal}>
           {trialLabel
-            ? `Essai gratuit de ${trialLabel.toLowerCase()}. Sans annulation au moins 24 h avant la fin, l'abonnement se renouvelle automatiquement à ${priceLabel}/${period.long}. `
-            : `Abonnement à ${priceLabel}/${period.long}, renouvelé automatiquement sauf annulation au moins 24 h avant la fin de la période. `}
-          Gère ou annule l'abonnement dans les réglages de ton compte Apple.
+            ? tr('pay.legalTrial', {
+                trial: trialLabel.toLowerCase(),
+                price: priceLabel,
+                period: period.long,
+              })
+            : tr('pay.legalPlain', {
+                price: priceLabel,
+                period: period.long,
+              })}
+          {tr('pay.legalManage')}
         </Text>
 
         <View style={styles.links}>
           <Pressable onPress={() => Linking.openURL(TERMS_URL)} hitSlop={8}>
-            <Text style={styles.link}>Conditions</Text>
+            <Text style={styles.link}>{tr('pay.terms')}</Text>
           </Pressable>
           <Text style={styles.linkSep}>·</Text>
           <Pressable onPress={() => Linking.openURL(PRIVACY_URL)} hitSlop={8}>
-            <Text style={styles.link}>Confidentialité</Text>
+            <Text style={styles.link}>{tr('pay.privacy')}</Text>
           </Pressable>
           <Text style={styles.linkSep}>·</Text>
           {/* Citations must be reachable without subscribing (guideline 1.4.1). */}
           <Pressable onPress={() => setSourcesOpen(true)} hitSlop={8}>
-            <Text style={styles.link}>Sources</Text>
+            <Text style={styles.link}>{tr('pay.sourcesLink')}</Text>
           </Pressable>
           {/* Only meaningful once an account exists — during the funnel the user
               reaches the paywall before signing in. */}
@@ -322,7 +333,7 @@ export function PaywallScreen({ onRequestSignIn }: Props = {}) {
             <>
               <Text style={styles.linkSep}>·</Text>
               <Pressable onPress={() => signOut()} hitSlop={8}>
-                <Text style={styles.link}>Se déconnecter</Text>
+                <Text style={styles.link}>{tr('pay.signOut')}</Text>
               </Pressable>
             </>
           ) : null}

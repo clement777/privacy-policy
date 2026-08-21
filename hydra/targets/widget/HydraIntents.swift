@@ -32,6 +32,12 @@ struct HydraSnapshotRW: Codable {
     // la clé, et ne doit pas verrouiller un abonné existant. D'où le repli
     // permissif dans `isPro` ci-dessous.
     var pro: Bool?
+    // Doit figurer ici, pas seulement dans SharedSnapshot : les intents
+    // RÉÉCRIVENT le snapshot complet après avoir ajouté un événement. Un champ
+    // absent de cette structure serait silencieusement effacé à chaque appui
+    // sur un bouton du widget — le widget repasserait en français dès le
+    // premier verre loggé depuis l'écran verrouillé.
+    var lang: String?
 }
 
 enum HydraStore {

@@ -4,14 +4,16 @@ import { C, FONTS, RADIUS } from '../theme/colors';
 import {
   ActiveSportSession,
   formatSportRemaining,
-  intensityLabel,
+  intensityKey,
 } from '../util/sport';
+import { useT } from '../i18n';
 
 interface Props {
   sessions: ActiveSportSession[];
 }
 
 export function SportActiveIndicator({ sessions }: Props) {
+  const tr = useT();
   const pulse = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
@@ -67,12 +69,14 @@ export function SportActiveIndicator({ sessions }: Props) {
     >
       <View style={styles.row}>
         <View style={styles.pulseDot} />
-        <Text style={styles.title}>SÉANCE EN COURS</Text>
-        <Text style={styles.intensity}>{intensityLabel(primary.intensity)}</Text>
+        <Text style={styles.title}>{tr('sport.active')}</Text>
+        <Text style={styles.intensity}>{tr(intensityKey(primary.intensity))}</Text>
       </View>
       <Text style={styles.line}>
-        −{Math.round(primary.sweatMlPerHour)} mL/h sueur ·{' '}
-        {formatSportRemaining(primary.remainingSec)} restantes
+        {tr('sport.sweatLine', {
+          ml: Math.round(primary.sweatMlPerHour),
+          time: formatSportRemaining(primary.remainingSec),
+        })}
       </Text>
     </Animated.View>
   );

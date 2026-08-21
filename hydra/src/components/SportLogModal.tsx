@@ -9,6 +9,7 @@ import {
 import * as Haptics from 'expo-haptics';
 import { SportIntensity } from '../engine/hydrationEngine';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { useT } from '../i18n';
 
 const DURATIONS = [15, 30, 45, 60] as const;
 
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function SportLogModal({ visible, onClose, onConfirm }: Props) {
+  const tr = useT();
   const [intensity, setIntensity] = useState<SportIntensity>('moderate');
   const [durationMin, setDurationMin] = useState<number>(30);
 
@@ -37,9 +39,9 @@ export function SportLogModal({ visible, onClose, onConfirm }: Props) {
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <Text style={styles.title}>SPORT</Text>
+          <Text style={styles.title}>{tr('sport.title')}</Text>
 
-          <Text style={styles.label}>INTENSITÉ</Text>
+          <Text style={styles.label}>{tr('sport.intensity')}</Text>
           <View style={styles.row}>
             {(['moderate', 'intense'] as const).map((k) => (
               <Pressable
@@ -48,13 +50,13 @@ export function SportLogModal({ visible, onClose, onConfirm }: Props) {
                 onPress={() => setIntensity(k)}
               >
                 <Text style={[styles.pillTxt, intensity === k && styles.pillTxtOn]}>
-                  {k === 'moderate' ? 'MODÉRÉ' : 'INTENSE'}
+                  {tr(k === 'moderate' ? 'sport.moderate' : 'sport.intense')}
                 </Text>
               </Pressable>
             ))}
           </View>
 
-          <Text style={styles.label}>DURÉE</Text>
+          <Text style={styles.label}>{tr('sport.duration')}</Text>
           <View style={styles.row}>
             {DURATIONS.map((d) => (
               <Pressable
@@ -69,13 +71,10 @@ export function SportLogModal({ visible, onClose, onConfirm }: Props) {
             ))}
           </View>
 
-          <Text style={styles.hint}>
-            La séance démarre maintenant — la barre descend plus vite pendant la
-            durée choisie.
-          </Text>
+          <Text style={styles.hint}>{tr('sport.hint')}</Text>
 
           <Pressable style={styles.confirm} onPress={submit}>
-            <Text style={styles.confirmTxt}>DÉMARRER LA SÉANCE</Text>
+            <Text style={styles.confirmTxt}>{tr('sport.confirm')}</Text>
           </Pressable>
         </Pressable>
       </Pressable>

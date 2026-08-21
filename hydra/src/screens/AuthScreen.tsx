@@ -15,6 +15,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../store/useAuth';
 import { track, EV } from '../analytics/analytics';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { useT } from '../i18n';
 
 type Mode = 'signIn' | 'signUp';
 
@@ -43,6 +44,7 @@ export function AuthScreen({
 }: Props = {}) {
   const { appleAvailable, signInWithApple, signInWithEmail, signUpWithEmail } =
     useAuth();
+  const tr = useT();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,7 +63,7 @@ export function AuthScreen({
     setError(null);
     setInfo(null);
     if (!email.includes('@') || password.length < 6) {
-      setError('Email valide + mot de passe de 6 caractères minimum.');
+      setError(tr('auth.invalid'));
       return;
     }
     setBusy(true);
@@ -72,7 +74,7 @@ export function AuthScreen({
     setBusy(false);
     if (!r.ok) setError(r.message);
     else if (mode === 'signUp')
-      setInfo('Compte créé. Vérifie ta boîte mail si une confirmation est demandée.');
+      setInfo(tr('auth.created'));
   };
 
   const doApple = async () => {
@@ -95,16 +97,16 @@ export function AuthScreen({
         >
           {onBack ? (
             <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
-              <Text style={styles.backTxt}>← Retour</Text>
+              <Text style={styles.backTxt}>{tr('common.backArrow')}</Text>
             </Pressable>
           ) : null}
 
           <View style={styles.hero}>
             <Text style={styles.brand}>HYDRA</Text>
             <Text style={styles.tag}>
-              {mode === 'signIn'
-                ? 'Reconnecte-toi pour retrouver ta progression et ton abonnement.'
-                : 'Dernière étape : crée ton compte pour sauvegarder ta progression et retrouver ta barre sur tous tes appareils.'}
+              {tr(
+                mode === 'signIn' ? 'auth.taglineSignIn' : 'auth.taglineSignUp'
+              )}
             </Text>
           </View>
 
@@ -129,7 +131,7 @@ export function AuthScreen({
                 <Text
                   style={[styles.modeTxt, mode === m && styles.modeTxtOn]}
                 >
-                  {m === 'signIn' ? 'SE CONNECTER' : 'CRÉER UN COMPTE'}
+                  {tr(m === 'signIn' ? 'auth.signIn' : 'auth.signUp')}
                 </Text>
               </Pressable>
             ))}
@@ -151,7 +153,7 @@ export function AuthScreen({
               />
               <View style={styles.divider}>
                 <View style={styles.line} />
-                <Text style={styles.or}>OU</Text>
+                <Text style={styles.or}>{tr('auth.or')}</Text>
                 <View style={styles.line} />
               </View>
             </>
@@ -159,7 +161,7 @@ export function AuthScreen({
 
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder={tr('auth.email')}
             placeholderTextColor={C.textDim}
             autoCapitalize="none"
             autoCorrect={false}
@@ -170,7 +172,7 @@ export function AuthScreen({
           />
           <TextInput
             style={styles.input}
-            placeholder="Mot de passe"
+            placeholder={tr('auth.password')}
             placeholderTextColor={C.textDim}
             secureTextEntry
             value={password}
@@ -190,7 +192,7 @@ export function AuthScreen({
               <ActivityIndicator color={C.bg} />
             ) : (
               <Text style={styles.primaryTxt}>
-                {mode === 'signIn' ? 'SE CONNECTER' : 'CRÉER UN COMPTE'}
+                {tr(mode === 'signIn' ? 'auth.signIn' : 'auth.signUp')}
               </Text>
             )}
           </Pressable>
@@ -198,11 +200,13 @@ export function AuthScreen({
           {/* Replaces the old footer toggle, which duplicated the switch above
               and was the element App Review found unresponsive. */}
           <Text style={styles.toggle}>
-            {!allowSignUp
-              ? 'Pas encore de compte ? Reviens en arrière : ton compte se crée une fois l’essai démarré.'
-              : mode === 'signIn'
-              ? 'Pas encore de compte ? Choisis CRÉER UN COMPTE en haut.'
-              : 'Déjà un compte ? Choisis SE CONNECTER en haut.'}
+            {tr(
+              !allowSignUp
+                ? 'auth.noSignUpHere'
+                : mode === 'signIn'
+                ? 'auth.toSignUp'
+                : 'auth.toSignIn'
+            )}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

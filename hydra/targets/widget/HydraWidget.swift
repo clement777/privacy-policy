@@ -26,6 +26,11 @@ extension Color {
 struct HydraEntry: TimelineEntry {
     let date: Date
     let state: HydrationState
+    // Portée par l'entrée plutôt que relue dans chaque vue : le snapshot est
+    // décodé UNE fois pour toute la timeline, et rouvrir l'App Group à chaque
+    // rendu est précisément ce qui mettait trois secondes entre l'appui sur
+    // ＋EAU et le mouvement de la barre.
+    var lang: HydraLang = .fr
 }
 
 struct HydraProvider: TimelineProvider {
@@ -63,6 +68,7 @@ struct HydraProvider: TimelineProvider {
             completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
             return
         }
+        let lang = HydraLang.from(snap.lang)
         let states = computeStateSeries(
             events: snap.events,
             ats: dates.map { $0.timeIntervalSince1970 * 1000 },
@@ -70,7 +76,7 @@ struct HydraProvider: TimelineProvider {
         var entries: [HydraEntry] = []
         entries.reserveCapacity(dates.count)
         for (i, date) in dates.enumerated() where i < states.count {
-            entries.append(HydraEntry(date: date, state: states[i]))
+            entries.append(HydraEntry(date: date, state: states[i], lang: lang))
         }
         completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(horizon))))
     }
@@ -85,7 +91,10 @@ struct HydraProvider: TimelineProvider {
     private func entry(at date: Date) -> HydraEntry {
         let ms = date.timeIntervalSince1970 * 1000
         if let snap = loadSharedSnapshot() {
-            return HydraEntry(date: date, state: computeState(events: snap.events, at: ms, profile: snap.profile))
+            return HydraEntry(
+                date: date,
+                state: computeState(events: snap.events, at: ms, profile: snap.profile),
+                lang: HydraLang.from(snap.lang))
         }
         return HydraEntry(date: date, state: HydraProvider.fallbackState)
     }
@@ -95,9 +104,13 @@ struct HydraProvider: TimelineProvider {
 private func zoneColor(_ s: HydrationState) -> Color {
     switch s.zone { case .poison: return .hPoison; case .red: return .hRed; case .amber: return .hAmber; case .green: return .hGreen }
 }
-private func statusText(_ s: HydrationState) -> String {
-    if s.poisoned { return "EMPOISONNÉ" }
-    switch s.zone { case .red: return "CRITIQUE"; case .amber: return "TU SÈCHES"; default: return "HYDRATÉ" }
+private func statusText(_ s: HydrationState, _ l: HydraLang) -> String {
+    if s.poisoned { return HydraCopy.zonePoisoned(l) }
+    switch s.zone {
+    case .red: return HydraCopy.zoneRed(l)
+    case .amber: return HydraCopy.zoneAmber(l)
+    default: return HydraCopy.zoneGreen(l)
+    }
 }
 private func countdown(_ s: HydrationState) -> String {
     guard let red = s.redAt else { return "—" }
@@ -178,6 +191,7 @@ struct HydraTapButton<I: AppIntent>: View {
 // ============================================================================
 struct HydraRectangularView: View {
     let state: HydrationState
+    let lang: HydraLang
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -187,7 +201,7 @@ struct HydraRectangularView: View {
             }
             HydraSegBar(pct: state.levelPct, color: .hGreen, mono: true, height: 10)
             HStack {
-                Text(statusText(state)).font(.system(size: 9, weight: .semibold))
+                Text(statusText(state, lang)).font(.system(size: 9, weight: .semibold))
                 Spacer()
                 Text(countdown(state)).font(.system(size: 9, design: .monospaced)).foregroundStyle(.secondary)
             }
@@ -201,6 +215,7 @@ struct HydraRectangularView: View {
 // ============================================================================
 struct HydraSmallView: View {
     let state: HydrationState
+    let lang: HydraLang
     var body: some View {
         let c = zoneColor(state)
         VStack(alignment: .leading, spacing: 6) {
@@ -214,12 +229,12 @@ struct HydraSmallView: View {
                 .minimumScaleFactor(0.6).lineLimit(1)
             HydraSegBar(pct: state.levelPct, color: c, height: 10)
             HStack {
-                Text(statusText(state)).font(.system(size: 9.5, weight: .black)).kerning(0.6).foregroundColor(c)
+                Text(statusText(state, lang)).font(.system(size: 9.5, weight: .black)).kerning(0.6).foregroundColor(c)
                 Spacer()
                 Text(countdown(state)).font(.system(size: 9, design: .monospaced)).foregroundColor(.hDim)
             }
             if #available(iOS 17.0, *) {
-                HydraTapButton(title: "＋ EAU", color: c, intent: LogWaterIntent(volumeMl: 250))
+                HydraTapButton(title: HydraCopy.water(lang), color: c, intent: LogWaterIntent(volumeMl: 250))
             }
         }
         .padding(2)
@@ -232,6 +247,7 @@ struct HydraSmallView: View {
 // ============================================================================
 struct HydraMediumView: View {
     let state: HydrationState
+    let lang: HydraLang
     var body: some View {
         let c = zoneColor(state)
         VStack(spacing: 8) {
@@ -241,7 +257,7 @@ struct HydraMediumView: View {
                     Text("HYDRA").font(.system(size: 9, weight: .black)).kerning(1.5).foregroundColor(.hDim)
                     Text("\(displayLevelPct(state.levelPct))%").font(.system(size: 30, weight: .black)).foregroundColor(c)
                         .minimumScaleFactor(0.6).lineLimit(1)
-                    Text(statusText(state)).font(.system(size: 9, weight: .black)).kerning(0.4).foregroundColor(c)
+                    Text(statusText(state, lang)).font(.system(size: 9, weight: .black)).kerning(0.4).foregroundColor(c)
                         .lineLimit(1).minimumScaleFactor(0.7)
                 }
                 .fixedSize()
@@ -261,10 +277,10 @@ struct HydraMediumView: View {
                 // One compact action row: water + the three alcohol tiers, all
                 // inside the widget bounds (no boxed wrapper so it fits vertically).
                 HStack(spacing: 6) {
-                    HydraTapButton(title: "＋ EAU", color: c, intent: LogWaterIntent(volumeMl: 250))
-                    HydraTapButton(title: "LÉGER",  color: .hAmber, intent: LogAlcoholIntent(volumeMl: 400, abv: 5))
-                    HydraTapButton(title: "MOYEN",  color: .hAmber, intent: LogAlcoholIntent(volumeMl: 150, abv: 14))
-                    HydraTapButton(title: "FORT",   color: .hRed,   intent: LogAlcoholIntent(volumeMl: 40,  abv: 40))
+                    HydraTapButton(title: HydraCopy.water(lang), color: c, intent: LogWaterIntent(volumeMl: 250))
+                    HydraTapButton(title: HydraCopy.alcoholLight(lang),  color: .hAmber, intent: LogAlcoholIntent(volumeMl: 400, abv: 5))
+                    HydraTapButton(title: HydraCopy.alcoholMedium(lang), color: .hAmber, intent: LogAlcoholIntent(volumeMl: 150, abv: 14))
+                    HydraTapButton(title: HydraCopy.alcoholStrong(lang), color: .hRed,   intent: LogAlcoholIntent(volumeMl: 40,  abv: 40))
                 }
             }
         }
@@ -280,9 +296,9 @@ struct HydraWidgetEntryView: View {
     let entry: HydraEntry
     var body: some View {
         switch family {
-        case .systemMedium: HydraMediumView(state: entry.state)
-        case .systemSmall:  HydraSmallView(state: entry.state)
-        default:            HydraRectangularView(state: entry.state) // accessoryRectangular
+        case .systemMedium: HydraMediumView(state: entry.state, lang: entry.lang)
+        case .systemSmall:  HydraSmallView(state: entry.state, lang: entry.lang)
+        default:            HydraRectangularView(state: entry.state, lang: entry.lang) // accessoryRectangular
         }
     }
 }

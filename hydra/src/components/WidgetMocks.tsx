@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { t } from '../i18n';
 import { displayLevelPct, HydrationState } from '../engine/hydrationEngine';
 
 // Faithful React-Native replicas of the native iOS widget (HydraWidget.swift)
@@ -24,17 +25,21 @@ function zoneColor(state: HydrationState): string {
   }
 }
 
+// Ces maquettes reproduisent le widget natif, qui est écrit en Swift et lit sa
+// langue dans le snapshot de l'App Group. `t()` non réactif convient donc :
+// l'aperçu doit montrer ce que le VRAI widget affichera, pas devancer un
+// changement de langue que le widget n'a pas encore repris.
 function statusLabel(s: HydrationState): string {
-  if (s.poisoned) return 'EMPOISONNÉ';
-  if (s.zone === 'red') return 'CRITIQUE';
-  if (s.zone === 'amber') return 'TU SÈCHES';
-  return 'HYDRATÉ';
+  if (s.poisoned) return t('zone.poison');
+  if (s.zone === 'red') return t('zone.red');
+  if (s.zone === 'amber') return t('zone.amber');
+  return t('zone.green');
 }
 
 function countdownLabel(s: HydrationState): string {
   if (s.redAt == null) return '—';
   const secs = s.redAt / 1000 - Date.now() / 1000;
-  if (secs <= 0) return 'ROUGE';
+  if (secs <= 0) return t('zone.red');
   const h = Math.floor(secs / 3600);
   const m = Math.round((secs % 3600) / 60);
   return h > 0 ? `→ ${h}h${String(m).padStart(2, '0')}` : `→ ${m}min`;
@@ -101,7 +106,8 @@ function FakeButton({
 }
 
 function waterLabel(waterMl?: number): string {
-  return waterMl ? `＋ EAU · ${waterMl} mL` : '＋ EAU';
+  const base = t('widget.water');
+  return waterMl ? `${base} · ${waterMl} mL` : base;
 }
 
 // ————————— Lock screen (accessoryRectangular, monochrome) —————————
@@ -208,24 +214,24 @@ export function MediumWidget({
       />
       {showAlcohol ? (
         <View style={styles.alcBox}>
-          <Text style={styles.alcLabel}>ALCOOL</Text>
+          <Text style={styles.alcLabel}>{t('widget.alcohol')}</Text>
           <View style={styles.alcBtns}>
             <FakeButton
-              label="LÉGER 2–8°"
+              label={t('widget.btnLight')}
               color={C.amber}
               border="rgba(255,176,32,0.42)"
               bg="rgba(255,176,32,0.13)"
               style={styles.alcBtn}
             />
             <FakeButton
-              label="MOYEN 9–22°"
+              label={t('widget.btnMedium')}
               color={C.amber}
               border="rgba(255,176,32,0.42)"
               bg="rgba(255,176,32,0.13)"
               style={styles.alcBtn}
             />
             <FakeButton
-              label="FORT 30–45°"
+              label={t('widget.btnStrong')}
               color={C.red}
               border="rgba(255,59,74,0.42)"
               bg="rgba(255,59,74,0.13)"

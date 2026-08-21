@@ -57,11 +57,12 @@ export function dayDrinkStats(
 
 export interface DayBar {
   dayStart: number;
-  label: string; // single-letter weekday (L M M J V S D)
+  /** Jour de la semaine, 0 = dimanche. La LETTRE affichée dépend de la langue
+   *  et se dérive au rendu : la calculer ici figerait « L M M J V S D » dans
+   *  un mémo que rien ne recalcule quand la langue change. */
+  weekday: number;
   waterMl: number;
 }
-
-const WEEKDAY_LETTERS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
 
 // Water volume for each of the last `count` days, oldest first, newest last.
 export function lastNDaysWater(
@@ -75,7 +76,7 @@ export function lastNDaysWater(
     const dayStart = todayStart - i * DAY_MS;
     out.push({
       dayStart,
-      label: WEEKDAY_LETTERS[new Date(dayStart).getDay()],
+      weekday: new Date(dayStart).getDay(),
       waterMl: dayDrinkStats(events, dayStart).waterMl,
     });
   }
@@ -180,7 +181,8 @@ export function poisonedMsThisWeek(
 
 export interface DayPoison {
   dayStart: number;
-  label: string; // single-letter weekday
+  /** Voir `DayBar.weekday`. */
+  weekday: number;
   poisonedMs: number;
 }
 
@@ -197,7 +199,7 @@ export function lastNDaysPoisoned(
     const end = Math.min(dayStart + DAY_MS, now);
     out.push({
       dayStart,
-      label: WEEKDAY_LETTERS[new Date(dayStart).getDay()],
+      weekday: new Date(dayStart).getDay(),
       poisonedMs: poisonedMsInRange(events, dayStart, end),
     });
   }

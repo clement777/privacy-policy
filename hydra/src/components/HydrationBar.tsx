@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { C, FONTS, RADIUS } from '../theme/colors';
+import { t } from '../i18n';
 import { displayLevelPct, HydrationState } from '../engine/hydrationEngine';
 
 interface Props {
@@ -63,17 +64,17 @@ export function HydrationBar({
       <Text style={styles.ml}>
         {Math.round(state.levelMl)} / {Math.round(state.dailyNeedMl)} mL
         {state.poisoned ? `  ·  POISON ×${state.poisonMult.toFixed(2)}` : ''}
-        {state.saturated ? '  ·  SATURÉ' : ''}
+        {state.saturated ? t('bar.saturated') : ''}
       </Text>
     </View>
   );
 }
 
 function statusLabel(s: HydrationState): string {
-  if (s.poisoned) return 'EMPOISONNÉ';
-  if (s.zone === 'red') return 'CRITIQUE';
-  if (s.zone === 'amber') return 'TU SÈCHES';
-  return 'HYDRATÉ';
+  if (s.poisoned) return t('zone.poison');
+  if (s.zone === 'red') return t('zone.red');
+  if (s.zone === 'amber') return t('zone.amber');
+  return t('zone.green');
 }
 
 const styles = StyleSheet.create({

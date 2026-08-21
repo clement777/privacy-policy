@@ -846,6 +846,10 @@ struct SharedSnapshot: Decodable {
     let updatedAt: TimeInterval
     let events: [HydrationEvent]
     let profile: UserProfile
+    // Langue choisie dans l'app. Optionnelle : un snapshot écrit par une
+    // version antérieure ne la porte pas, et le widget retombe alors en
+    // français plutôt que de refuser de s'afficher.
+    let lang: String?
 }
 
 func loadSharedSnapshot(appGroup: String = "group.com.shipply.hydraapp") -> SharedSnapshot? {

@@ -13,6 +13,10 @@ export interface SharedSnapshot {
   events: HydrationEvent[];
   profile: UserProfile;
   widget?: WidgetSettings;
+  // Langue choisie dans l'app. Le widget tourne sans elle et n'a aucun autre
+  // moyen de la connaître : la langue du SYSTÈME n'est pas la bonne réponse,
+  // puisque quelqu'un peut mettre HYDRA en anglais sur un iPhone français.
+  lang?: string;
   // Abonnement actif ? Le widget en a besoin pour décider s'il logge ou s'il
   // renvoie vers le paywall.
   //

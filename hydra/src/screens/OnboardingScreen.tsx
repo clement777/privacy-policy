@@ -16,29 +16,53 @@ import { awakeHoursFromSleep, FEELING_LEVEL_PCT, FeelingKey, ML_PER_KG_DAY, Sex 
 import { useHydration } from '../store/useHydration';
 import { track, EV } from '../analytics/analytics';
 import { WATER_CONTAINERS } from '../store/widgetSettings';
+import { StringKey, useT } from '../i18n';
+import { LanguagePicker } from '../components/LanguagePicker';
 
-const STEP_TITLES = [
-  'BIENVENUE',
-  'TOI',
-  'TON RYTHME',
-  'ENVIRONNEMENT',
-  'TON EAU',
-  'ÉTAT',
-  'RÉCAP',
-] as const;
+// Chaque étape porte une CLÉ stable en plus de son titre traduit.
+//
+// C'est la clé qui part dans PostHog. Sans elle, le même abandon serait compté
+// sous « ÉTAT » pour un francophone et sous « STATE » pour un anglophone : le
+// tunnel se scinderait en deux au premier utilisateur étranger, et la mesure
+// qui a coûté le plus cher à mettre en place deviendrait illisible.
+const STEPS: readonly { key: string; title: StringKey }[] = [
+  { key: 'language', title: 'onb.step.language' },
+  { key: 'welcome', title: 'onb.step.welcome' },
+  { key: 'you', title: 'onb.step.you' },
+  { key: 'rhythm', title: 'onb.step.rhythm' },
+  { key: 'environment', title: 'onb.step.environment' },
+  { key: 'water', title: 'onb.step.water' },
+  { key: 'state', title: 'onb.step.state' },
+  { key: 'recap', title: 'onb.step.recap' },
+];
 
 const FEELING_OPTIONS: {
   key: FeelingKey;
-  label: string;
-  hint: string;
+  label: StringKey;
+  hint: StringKey;
   pct: number;
 }[] = [
-  { key: 'good', label: 'BIEN', hint: 'Hydraté, en forme', pct: FEELING_LEVEL_PCT.good },
-  { key: 'ok', label: 'MOYEN', hint: 'Un peu fatigué / soif', pct: FEELING_LEVEL_PCT.ok },
-  { key: 'dry', label: 'ASSÉCHÉ', hint: 'Soif, tête lourde', pct: FEELING_LEVEL_PCT.dry },
+  {
+    key: 'good',
+    label: 'onb.feeling.good',
+    hint: 'onb.feeling.good.hint',
+    pct: FEELING_LEVEL_PCT.good,
+  },
+  {
+    key: 'ok',
+    label: 'onb.feeling.ok',
+    hint: 'onb.feeling.ok.hint',
+    pct: FEELING_LEVEL_PCT.ok,
+  },
+  {
+    key: 'dry',
+    label: 'onb.feeling.dry',
+    hint: 'onb.feeling.dry.hint',
+    pct: FEELING_LEVEL_PCT.dry,
+  },
 ];
 
-const LAST = STEP_TITLES.length - 1;
+const LAST = STEPS.length - 1;
 
 function tap() {
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -130,6 +154,7 @@ export function OnboardingScreen({
   onSignOut?: () => void;
 } = {}) {
   const { profile, widget, completeOnboarding } = useHydration();
+  const tr = useT();
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -139,7 +164,7 @@ export function OnboardingScreen({
   // questions fait décrocher — aujourd'hui on sait seulement que 93 personnes
   // sur 100 n'arrivent jamais à l'essai, sans savoir où elles s'arrêtent.
   useEffect(() => {
-    track(EV.onboardingStep, { index: step, title: STEP_TITLES[step] });
+    track(EV.onboardingStep, { index: step, title: STEPS[step].key });
   }, [step]);
 
   useEffect(() => {
@@ -163,6 +188,10 @@ export function OnboardingScreen({
   const [customMode, setCustomMode] = useState(!isPreset);
   const [customMl, setCustomMl] = useState(String(widget.defaultWaterMl));
   const [feeling, setFeeling] = useState<FeelingKey>('ok');
+
+  const feelingLabel = tr(
+    FEELING_OPTIONS.find((o) => o.key === feeling)?.label ?? 'onb.feeling.ok'
+  );
 
   const need = Math.round(weightKg * ML_PER_KG_DAY);
   const awakeHours = awakeHoursFromSleep(sleepStartHour, sleepEndHour);
@@ -242,9 +271,9 @@ export function OnboardingScreen({
     <SafeAreaView style={styles.root}>
       {/* Progress */}
       <View style={styles.progressRow}>
-        {STEP_TITLES.map((_, i) => (
+        {STEPS.map((st, i) => (
           <View
-            key={i}
+            key={st.key}
             style={[
               styles.dot,
               i === step && styles.dotActive,
@@ -256,9 +285,9 @@ export function OnboardingScreen({
 
       <View style={styles.headerRow}>
         <Text style={styles.stepKicker}>
-          ÉTAPE {step + 1}/{STEP_TITLES.length}
+          {tr('onb.kicker', { n: step + 1, total: STEPS.length })}
         </Text>
-        <Text style={styles.stepTitle}>{STEP_TITLES[step]}</Text>
+        <Text style={styles.stepTitle}>{tr(STEPS[step].title)}</Text>
       </View>
 
       <ScrollView
@@ -266,21 +295,23 @@ export function OnboardingScreen({
         contentContainerStyle={styles.body}
         showsVerticalScrollIndicator={false}
       >
+        {/* Le tout premier écran de l'app. Aucun texte n'y est indispensable
+            à la compréhension : les drapeaux suffisent à quelqu'un qui ne lit
+            pas encore la langue affichée. */}
         {step === 0 && (
           <View style={styles.welcome}>
             <Text style={styles.brand}>HYDRA</Text>
-            <Text style={styles.tagline}>
-              Ta barre de vie hydrique, en temps réel.
-            </Text>
-            <Text style={styles.paragraph}>
-              HYDRA calcule ton hydratation à partir de ta physiologie : ton
-              poids, ton effort, la chaleur, l'alcool… Pour que la barre colle à
-              TA réalité, on a besoin de quelques infos.
-            </Text>
-            <Text style={styles.paragraphDim}>
-              Ça prend 30 secondes. Tout est modifiable ensuite dans WIDGETS →
-              PROFIL.
-            </Text>
+            <LanguagePicker />
+            <Text style={styles.paragraphDim}>{tr('onb.language.help')}</Text>
+          </View>
+        )}
+
+        {step === 1 && (
+          <View style={styles.welcome}>
+            <Text style={styles.brand}>HYDRA</Text>
+            <Text style={styles.tagline}>{tr('onb.welcome.tagline')}</Text>
+            <Text style={styles.paragraph}>{tr('onb.welcome.body')}</Text>
+            <Text style={styles.paragraphDim}>{tr('onb.welcome.duration')}</Text>
             {onHaveAccount ? (
               <Pressable
                 onPress={() => {
@@ -291,14 +322,13 @@ export function OnboardingScreen({
                 style={styles.haveAccountWrap}
               >
                 <Text style={styles.haveAccount}>
-                  Déjà un compte ? Se connecter
+                  {tr('onb.welcome.haveAccount')}
                 </Text>
               </Pressable>
             ) : onSignOut ? (
               <View style={styles.haveAccountWrap}>
                 <Text style={styles.signedInNote}>
-                  Tu es connecté, mais ce compte n’a pas encore de profil
-                  HYDRA. Complète le questionnaire, ou change de compte.
+                  {tr('onb.welcome.signedInNote')}
                 </Text>
                 <Pressable
                   onPress={() => {
@@ -308,7 +338,7 @@ export function OnboardingScreen({
                   hitSlop={8}
                 >
                   <Text style={styles.haveAccount}>
-                    Utiliser un autre compte
+                    {tr('onb.welcome.otherAccount')}
                   </Text>
                 </Pressable>
               </View>
@@ -316,13 +346,10 @@ export function OnboardingScreen({
           </View>
         )}
 
-        {step === 1 && (
+        {step === 2 && (
           <>
-            <Text style={styles.help}>
-              Le poids et le sexe déterminent ton besoin quotidien et ta perte de
-              sueur à l'effort.
-            </Text>
-            <Field label="SEXE">
+            <Text style={styles.help}>{tr('onb.you.help')}</Text>
+            <Field label={tr('onb.you.sex')}>
               <View style={styles.pill}>
                 {(['male', 'female'] as const).map((s) => (
                   <Pressable
@@ -336,13 +363,13 @@ export function OnboardingScreen({
                     <Text
                       style={[styles.pillTxt, sex === s && styles.pillTxtOn]}
                     >
-                      {s === 'male' ? 'HOMME' : 'FEMME'}
+                      {tr(s === 'male' ? 'common.male' : 'common.female')}
                     </Text>
                   </Pressable>
                 ))}
               </View>
             </Field>
-            <Field label="POIDS">
+            <Field label={tr('onb.you.weight')}>
               <Stepper
                 value={weightKg}
                 min={30}
@@ -353,18 +380,15 @@ export function OnboardingScreen({
               />
             </Field>
             <Text style={styles.needPreview}>
-              BESOIN QUOTIDIEN ESTIMÉ · {need} mL
+              {tr('onb.you.needPreview', { ml: need })}
             </Text>
           </>
         )}
 
-        {step === 2 && (
+        {step === 3 && (
           <>
-            <Text style={styles.help}>
-              Indique tes horaires de sommeil. Tes heures d'éveil en sont
-              déduites automatiquement — la barre ralentit la nuit.
-            </Text>
-            <Field label="COUCHER">
+            <Text style={styles.help}>{tr('onb.rhythm.help')}</Text>
+            <Field label={tr('onb.rhythm.bedtime')}>
               <Stepper
                 value={sleepStartHour}
                 min={0}
@@ -374,7 +398,7 @@ export function OnboardingScreen({
                 onChange={setSleepStartHour}
               />
             </Field>
-            <Field label="RÉVEIL">
+            <Field label={tr('onb.rhythm.wakeup')}>
               <Stepper
                 value={sleepEndHour}
                 min={0}
@@ -385,19 +409,16 @@ export function OnboardingScreen({
               />
             </Field>
             <Text style={styles.needPreview}>
-              ≈ {awakeHours}h ÉVEILLÉ · {sleepHours}h DE SOMMEIL
+              {tr('onb.rhythm.preview', { awake: awakeHours, sleep: sleepHours })}
             </Text>
           </>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <>
-            <Text style={styles.help}>
-              La chaleur et l'humidité augmentent la sueur. Optionnel — tu peux
-              passer et le régler plus tard.
-            </Text>
+            <Text style={styles.help}>{tr('onb.env.help')}</Text>
             <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>RENSEIGNER MON ENVIRONNEMENT</Text>
+              <Text style={styles.switchLabel}>{tr('onb.env.switch')}</Text>
               <Switch
                 value={envOn}
                 onValueChange={(v) => {
@@ -410,7 +431,7 @@ export function OnboardingScreen({
             </View>
             {envOn && (
               <>
-                <Field label="TEMPÉRATURE AMBIANTE">
+                <Field label={tr('onb.env.temp')}>
                   <Stepper
                     value={ambientTempC}
                     min={-20}
@@ -419,7 +440,7 @@ export function OnboardingScreen({
                     onChange={setAmbientTempC}
                   />
                 </Field>
-                <Field label="HUMIDITÉ RELATIVE">
+                <Field label={tr('onb.env.humidity')}>
                   <Stepper
                     value={relativeHumidityPct}
                     min={0}
@@ -429,7 +450,7 @@ export function OnboardingScreen({
                     onChange={setRelativeHumidityPct}
                   />
                 </Field>
-                <Field label="ALTITUDE">
+                <Field label={tr('onb.env.altitude')}>
                   <Stepper
                     value={altitudeM}
                     min={0}
@@ -444,12 +465,9 @@ export function OnboardingScreen({
           </>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <>
-            <Text style={styles.help}>
-              Ton contenant habituel : un tap dans le widget = ce volume d'eau
-              enregistré.
-            </Text>
+            <Text style={styles.help}>{tr('onb.water.help')}</Text>
             <View style={styles.containerGrid}>
               {WATER_CONTAINERS.map((c) => {
                 const on = !customMode && defaultWaterMl === c.ml;
@@ -510,21 +528,21 @@ export function OnboardingScreen({
                     customMode && styles.containerTxtOn,
                   ]}
                 >
-                  PERSONNALISÉ
+                  {tr('common.custom')}
                 </Text>
               </Pressable>
             </View>
 
             {customMode && (
               <View style={styles.customWrap}>
-                <Text style={styles.fieldLabel}>VOLUME PERSONNALISÉ</Text>
+                <Text style={styles.fieldLabel}>{tr('onb.water.customLabel')}</Text>
                 <View style={styles.customRow}>
                   <TextInput
                     style={styles.customInput}
                     keyboardType="numeric"
                     value={customMl}
                     onChangeText={onCustomChange}
-                    placeholder="ex. 400"
+                    placeholder={tr('onb.water.placeholder')}
                     placeholderTextColor={C.textDim}
                     maxLength={4}
                     autoFocus
@@ -532,19 +550,16 @@ export function OnboardingScreen({
                   <Text style={styles.customUnit}>mL</Text>
                 </View>
                 <Text style={styles.customHint}>
-                  Entre {CUSTOM_MIN} et {CUSTOM_MAX} mL.
+                  {tr('onb.water.range', { min: CUSTOM_MIN, max: CUSTOM_MAX })}
                 </Text>
               </View>
             )}
           </>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <>
-            <Text style={styles.help}>
-              On ne te connaît pas encore. Dis-nous comment tu te sens
-              maintenant — la barre démarre là, pas à 100 %.
-            </Text>
+            <Text style={styles.help}>{tr('onb.state.help')}</Text>
             <View style={styles.feelingList}>
               {FEELING_OPTIONS.map((opt) => {
                 const on = feeling === opt.key;
@@ -561,7 +576,7 @@ export function OnboardingScreen({
                       <Text
                         style={[styles.feelingLabel, on && styles.feelingTxtOn]}
                       >
-                        {opt.label}
+                        {tr(opt.label)}
                       </Text>
                       <Text
                         style={[styles.feelingPct, on && styles.feelingTxtOn]}
@@ -572,7 +587,7 @@ export function OnboardingScreen({
                     <Text
                       style={[styles.feelingHint, on && styles.feelingHintOn]}
                     >
-                      {opt.hint}
+                      {tr(opt.hint)}
                     </Text>
                   </Pressable>
                 );
@@ -581,30 +596,36 @@ export function OnboardingScreen({
           </>
         )}
 
-        {step === 6 && (
+        {step === 7 && (
           <>
-            <Text style={styles.help}>Tout est prêt. Vérifie et démarre.</Text>
+            <Text style={styles.help}>{tr('onb.recap.help')}</Text>
             <View style={styles.recap}>
-              <RecapRow label="Sexe" value={sex === 'male' ? 'Homme' : 'Femme'} />
-              <RecapRow label="Poids" value={`${weightKg} kg`} />
-              <RecapRow label="Besoin / jour" value={`${need} mL`} />
               <RecapRow
-                label="Sommeil"
+                label={tr('onb.recap.sex')}
+                value={tr(sex === 'male' ? 'onb.recap.male' : 'onb.recap.female')}
+              />
+              <RecapRow label={tr('onb.recap.weight')} value={`${weightKg} kg`} />
+              <RecapRow label={tr('onb.recap.need')} value={`${need} mL`} />
+              <RecapRow
+                label={tr('onb.recap.sleep')}
                 value={`${sleepStartHour}h → ${sleepEndHour}h (${sleepHours}h)`}
               />
-              <RecapRow label="Éveil / jour" value={`${awakeHours} h`} />
+              <RecapRow label={tr('onb.recap.awake')} value={`${awakeHours} h`} />
               <RecapRow
-                label="Environnement"
+                label={tr('onb.recap.environment')}
                 value={
                   envOn
                     ? `${ambientTempC}°C · ${relativeHumidityPct}% · ${altitudeM} m`
-                    : 'Par défaut'
+                    : tr('onb.recap.defaults')
                 }
               />
-              <RecapRow label="Contenant eau" value={`${defaultWaterMl} mL`} />
               <RecapRow
-                label="État de départ"
-                value={`${FEELING_OPTIONS.find((o) => o.key === feeling)?.label ?? feeling} · ${FEELING_LEVEL_PCT[feeling]} %`}
+                label={tr('onb.recap.container')}
+                value={`${defaultWaterMl} mL`}
+              />
+              <RecapRow
+                label={tr('onb.recap.startState')}
+                value={`${feelingLabel} · ${FEELING_LEVEL_PCT[feeling]} %`}
               />
             </View>
           </>
@@ -615,7 +636,7 @@ export function OnboardingScreen({
       <View style={styles.nav}>
         {step > 0 ? (
           <Pressable style={styles.backBtn} onPress={goBack}>
-            <Text style={styles.backTxt}>RETOUR</Text>
+            <Text style={styles.backTxt}>{tr('common.back')}</Text>
           </Pressable>
         ) : (
           <View style={styles.backSpacer} />
@@ -626,11 +647,13 @@ export function OnboardingScreen({
           disabled={busy}
         >
           <Text style={styles.primaryTxt}>
-            {step === 0
-              ? 'COMMENCER'
-              : step === LAST
-              ? "C'EST PARTI"
-              : 'SUIVANT'}
+            {tr(
+              step === 1
+                ? 'common.start'
+                : step === LAST
+                ? 'common.letsGo'
+                : 'common.next'
+            )}
           </Text>
         </Pressable>
       </View>
@@ -641,17 +664,17 @@ export function OnboardingScreen({
 // Personalised "we're preparing your plan" transition shown between the last
 // onboarding step and the paywall. Cycles a few reassuring lines while the
 // answers are saved, so the paywall feels earned rather than abrupt.
-const PREP_MSGS = [
-  'On calcule ton besoin quotidien à partir de ton poids…',
-  'On ajuste selon ta fenêtre de sommeil…',
-  'On intègre ta température et ton humidité ambiantes…',
-  'On prépare ta répartition de consommation d’eau dans la journée…',
-  'On cale ta barre de vie sur ton rythme de sommeil…',
-  'On règle ton plafond d’absorption horaire…',
-  'On paramètre l’impact de l’alcool sur ta barre…',
-  'On calibre tes rappels par verre…',
-  'Ton profil est prêt.',
-] as const;
+const PREP_MSGS: readonly StringKey[] = [
+  'onb.prep.1',
+  'onb.prep.2',
+  'onb.prep.3',
+  'onb.prep.4',
+  'onb.prep.5',
+  'onb.prep.6',
+  'onb.prep.7',
+  'onb.prep.8',
+  'onb.prep.9',
+];
 
 const PREP_STEP_MS = 850;
 // Derived, not hand-written: the screen used to hold for a hard-coded 2 700 ms
@@ -660,6 +683,7 @@ const PREP_STEP_MS = 850;
 export const PREP_TOTAL_MS = PREP_MSGS.length * PREP_STEP_MS;
 
 function PreparingView({ need }: { need: number }) {
+  const tr = useT();
   const [idx, setIdx] = useState(0);
   useEffect(() => {
     const id = setInterval(
@@ -677,8 +701,8 @@ function PreparingView({ need }: { need: number }) {
           color={C.segmentFull}
           style={{ marginVertical: 28 }}
         />
-        <Text style={styles.prepMsg}>{PREP_MSGS[idx]}</Text>
-        <Text style={styles.prepNeed}>OBJECTIF ESTIMÉ · {need} mL / JOUR</Text>
+        <Text style={styles.prepMsg}>{tr(PREP_MSGS[idx])}</Text>
+        <Text style={styles.prepNeed}>{tr('onb.prep.goal', { ml: need })}</Text>
       </View>
     </SafeAreaView>
   );

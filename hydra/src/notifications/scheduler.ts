@@ -7,6 +7,10 @@ import {
 } from '../engine/hydrationEngine';
 import { dayDrinkStats } from '../util/stats';
 import { WidgetSettings } from '../store/widgetSettings';
+// `t()` et non `useT()` : on est hors de React. Le texte est figé au moment où
+// la notification est PROGRAMMÉE, ce qui est le bon instant — et changer de
+// langue déclenche une reprogrammation complète (voir useHydration._sync).
+import { t } from '../i18n';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -55,11 +59,11 @@ async function scheduleGlassReminders(
     const left = glassesLeft - i + 1;
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'VERRE SUIVANT.',
+        title: t('notif.nextGlass.title'),
         body:
           left > 1
-            ? `Encore ${left} verres pour tenir ton objectif du jour.`
-            : 'Dernier verre pour tenir ton objectif du jour.',
+            ? t('notif.nextGlass.many', { n: left })
+            : t('notif.nextGlass.last'),
       },
       trigger: { date: new Date(nowMs + stepMs * i) },
     });
@@ -78,8 +82,8 @@ export async function rescheduleNotifications(
     if (state.ambleAt && state.ambleAt > nowMs) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'TU SÈCHES.',
-          body: 'La barre a franchi la zone ambre. Bois maintenant.',
+          title: t('notif.amber.title'),
+          body: t('notif.amber.body'),
         },
         trigger: { date: new Date(state.ambleAt) },
       });
@@ -87,8 +91,8 @@ export async function rescheduleNotifications(
     if (state.redAt && state.redAt > nowMs) {
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: 'CRITIQUE.',
-          body: 'HYDRA passe en rouge. Verre. Tout de suite.',
+          title: t('notif.red.title'),
+          body: t('notif.red.body'),
         },
         trigger: { date: new Date(state.redAt) },
       });

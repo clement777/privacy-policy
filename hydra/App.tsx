@@ -14,6 +14,7 @@ import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { C, FONTS } from './src/theme/colors';
+import { useLocale, useLocaleStore, useT } from './src/i18n';
 import { ensurePermissions } from './src/notifications/scheduler';
 import { initAnalytics, flushAnalytics } from './src/analytics/analytics';
 import { useHydration } from './src/store/useHydration';
@@ -110,6 +111,18 @@ export default function App() {
   // dropped back into the questionnaire they already completed (exactly the
   // "renvoyé sur BIENVENUE" loop). Bounded: an empty or failed pull falls through
   // to the questionnaire rather than stranding anyone on the splash.
+  const tr = useT();
+  const locale = useLocale();
+  // Même motif que `storeHydrated` ci-dessus : `onFinishHydration` se déclenche
+  // aussi en cas d'échec de lecture, donc l'app démarre toujours.
+  const [localeHydrated, setLocaleHydrated] = useState(() =>
+    useLocaleStore.persist.hasHydrated()
+  );
+  useEffect(
+    () => useLocaleStore.persist.onFinishHydration(() => setLocaleHydrated(true)),
+    []
+  );
+
   const [awaitingSync, setAwaitingSync] = useState(false);
   useEffect(() => {
     if (authStatus !== 'signedIn' || onboarded) {
@@ -167,15 +180,33 @@ export default function App() {
     }
   }, [authStatus, userId]);
 
-  // Wait for fonts, persisted state AND auth before deciding what to show.
-  if (!fontsLoaded || !storeHydrated || authStatus === 'loading') {
+  // Changer de langue ne suffit PAS à traduire ce qui vit hors de React : le
+  // widget natif lit son texte dans le snapshot de l'App Group, et les
+  // notifications sont écrites au moment où elles sont programmées — donc
+  // celles déjà en file portent encore l'ancienne langue. `_sync` réécrit le
+  // snapshot et replanifie tout, ce qui règle les deux d'un coup.
+  useEffect(() => {
+    if (!storeHydrated) return;
+    useHydration.getState()._sync().catch(() => {});
+  }, [locale, storeHydrated]);
+
+  // Attendre AUSSI la langue persistée. Sans ce verrou, le premier rendu se
+  // fait dans la langue de l'appareil, puis bascule : quelqu'un qui a choisi
+  // l'anglais sur un iPhone français verrait le questionnaire clignoter en
+  // français à chaque lancement.
+  if (
+    !fontsLoaded ||
+    !storeHydrated ||
+    !localeHydrated ||
+    authStatus === 'loading'
+  ) {
     return <Splash />;
   }
 
   // Just signed in, cloud profile not merged yet — hold rather than flash the
   // questionnaire at someone who already finished it. Self-releases after 5 s.
   if (awaitingSync) {
-    return <Splash note="Récupération de ton profil…" />;
+    return <Splash note={tr('splash.loadingProfile')} />;
   }
 
   // Returning user / reviewer: jump to sign-in even before the questionnaire
@@ -296,10 +327,15 @@ export default function App() {
               },
             }}
           >
+            {/* `name` reste l'IDENTIFIANT de route et ne se traduit pas :
+                `initialRouteName` s'appuie dessus, et une route renommée avec
+                la langue enverrait le premier lancement anglais nulle part.
+                Seul `tabBarLabel` est traduit. */}
             <Tab.Screen
               name="BARRE"
               component={HomeScreen}
               options={{
+                tabBarLabel: tr('tab.bar'),
                 tabBarIcon: ({ color, size }) => (
                   <Ionicons name="water" size={size} color={color} />
                 ),
@@ -309,6 +345,7 @@ export default function App() {
               name="DONNÉES"
               component={DataScreen}
               options={{
+                tabBarLabel: tr('tab.data'),
                 tabBarIcon: ({ color, size }) => (
                   <Ionicons name="stats-chart" size={size} color={color} />
                 ),
@@ -318,6 +355,7 @@ export default function App() {
               name="WIDGETS"
               component={WidgetsScreen}
               options={{
+                tabBarLabel: tr('tab.widgets'),
                 tabBarIcon: ({ color, size }) => (
                   <Ionicons name="apps" size={size} color={color} />
                 ),

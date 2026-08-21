@@ -24,43 +24,66 @@ import {
   poisonedMsThisWeek,
   poisonFreeStreak,
 } from '../util/stats';
+import { currentBcp47, StringKey, useT } from '../i18n';
+
+type Translate = (key: StringKey, params?: Record<string, string | number>) => string;
 
 // "2 h 05" / "45 min" / "0" — compact poisoned-time label.
-function formatDuration(ms: number): string {
+function formatDuration(ms: number, tr: Translate): string {
   const totalMin = Math.round(ms / 60_000);
   if (totalMin <= 0) return '0';
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (h === 0) return `${m} min`;
-  return `${h} h ${String(m).padStart(2, '0')}`;
+  if (h === 0) return tr('data.durationMin', { m });
+  return tr('data.durationHm', { h, m: String(m).padStart(2, '0') });
 }
 
-// "15 janv. 2026" — short French date for the lifetime "since" line.
+// « 15 janv. 2026 » / "15 Jan 2026" — la date suit la langue choisie dans
+// l'app, pas celle du système : quelqu'un qui met HYDRA en anglais sur un
+// iPhone français ne veut pas d'une date à moitié traduite.
 function formatSince(ms: number): string {
-  return new Date(ms).toLocaleDateString('fr-FR', {
+  return new Date(ms).toLocaleDateString(currentBcp47(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 }
 
-function labelFor(e: HydrationEvent): { text: string; color: string } {
+function labelFor(
+  e: HydrationEvent,
+  tr: Translate
+): { text: string; color: string } {
   switch (e.type) {
     case 'water':
-      return { text: `EAU  ${e.volumeMl}ml`, color: C.segmentFull };
+      return { text: tr('data.evt.water', { ml: e.volumeMl }), color: C.segmentFull };
     case 'electrolytes':
-      return { text: `ÉLECTROLYTES  ${e.volumeMl}ml`, color: C.segmentFull };
+      return {
+        text: tr('data.evt.electrolytes', { ml: e.volumeMl }),
+        color: C.segmentFull,
+      };
     case 'alcohol':
-      return { text: `ALCOOL  ${e.volumeMl}ml / ${e.abv}%`, color: C.poison };
+      return {
+        text: tr('data.evt.alcohol', { ml: e.volumeMl, abv: e.abv }),
+        color: C.poison,
+      };
     case 'caffeine':
-      return { text: `CAFÉINE  ${e.volumeMl}ml`, color: C.textDim };
+      return { text: tr('data.evt.caffeine', { ml: e.volumeMl }), color: C.textDim };
     case 'sport':
       return {
-        text: `SPORT ${e.intensity.toUpperCase()}  ${e.durationMin}min`,
+        text: tr('data.evt.sport', {
+          intensity: tr(
+            e.intensity === 'intense'
+              ? 'sport.intense'
+              : e.intensity === 'light'
+              ? 'sport.light'
+              : 'sport.moderate'
+          ),
+          min: e.durationMin,
+        }),
         color: C.amber,
       };
     case 'profile':
-      return { text: 'PROFIL modifié', color: C.textDim };
+      return { text: tr('data.evt.profile'), color: C.textDim };
   }
 }
 
@@ -91,7 +114,7 @@ function StatCard({
           <InfoTip
             title={hintTitle}
             body={hintBody}
-            accessibilityLabel={`Détails : ${label}`}
+            accessibilityLabel={undefined}
           />
         ) : null}
       </View>
@@ -101,6 +124,7 @@ function StatCard({
 
 export function DataScreen() {
   const { events, profile, deleteEvent } = useHydration();
+  const tr = useT();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -117,7 +141,9 @@ export function DataScreen() {
     () => greenStreak(events, now, goal),
     [events, now, goal]
   );
-  const streakHint = vagueHint(goal);
+  const streakHint = vagueHint(goal, tr);
+  // Dimanche → samedi, dans la langue courante.
+  const weekdayLetters = tr('data.weekdayLetters').split(',');
   const bars = useMemo(() => lastNDaysWater(events, now, 7), [events, now]);
   const maxBar = Math.max(goal, ...bars.map((b) => b.waterMl), 1);
 
@@ -142,55 +168,55 @@ export function DataScreen() {
   return (
     <SafeAreaView style={styles.root}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <Text style={styles.title}>DONNÉES</Text>
+        <Text style={styles.title}>{tr('data.title')}</Text>
 
         <View style={styles.cardRow}>
           <StatCard
             value={(today.waterMl / 1000).toFixed(today.waterMl >= 1000 ? 2 : 1)}
             unit="L"
-            label="BU AUJOURD'HUI"
+            label={tr('data.drunkToday')}
             color={C.segmentFull}
           />
-          <StatCard value={String(today.glasses)} label="VERRES" />
+          <StatCard value={String(today.glasses)} label={tr('data.glasses')} />
         </View>
         <View style={styles.cardRow}>
           <StatCard
             value={`${greenPct}`}
             unit="%"
-            label="TEMPS DANS LE VERT"
+            label={tr('data.greenTime')}
             color={greenPct >= 60 ? C.segmentFull : C.amber}
           />
           <StatCard
             value={String(streak)}
             unit="J"
-            label="LA VAGUE 🌊"
+            label={tr('data.wave')}
             hintTitle={streakHint.title}
             hintBody={streakHint.body}
             color={streak > 0 ? C.segmentFull : C.textDim}
           />
         </View>
 
-        <Text style={styles.section}>DEPUIS LE DÉBUT</Text>
+        <Text style={styles.section}>{tr('data.sinceStart')}</Text>
         <View style={styles.cardRow}>
           <StatCard
             value={(totals.waterMl / 1000).toFixed(totals.waterMl >= 10_000 ? 0 : 1)}
             unit="L"
-            label="EAU BUE EN TOUT"
+            label={tr('data.waterTotal')}
             color={C.segmentFull}
           />
           <StatCard
             value={String(totals.alcoholUnits)}
-            label="VERRES D'ALCOOL EN TOUT"
+            label={tr('data.alcoholTotal')}
             color={totals.alcoholUnits > 0 ? C.poison : C.textDim}
           />
         </View>
         <Text style={styles.chartHint}>
           {totals.sinceMs
-            ? `Ton compteur total depuis le ${formatSince(totals.sinceMs)} — il ne fait que monter.`
-            : 'Ton compteur total démarrera dès ton premier verre.'}
+            ? tr('data.sinceLine', { date: formatSince(totals.sinceMs) })
+            : tr('data.sinceEmpty')}
         </Text>
 
-        <Text style={styles.section}>7 DERNIERS JOURS</Text>
+        <Text style={styles.section}>{tr('data.last7')}</Text>
         <View style={styles.chart}>
           {bars.map((b, i) => {
             const h = Math.max(2, (b.waterMl / maxBar) * 90);
@@ -219,26 +245,28 @@ export function DataScreen() {
                     isToday && { color: C.text, fontFamily: FONTS.monoBold },
                   ]}
                 >
-                  {b.label}
+                  {weekdayLetters[b.weekday] ?? ''}
                 </Text>
               </View>
             );
           })}
         </View>
         <Text style={styles.chartHint}>
-          Objectif {Math.round(goal)} mL/j · barre pleine = objectif atteint
+          {tr('data.goalHint', { ml: Math.round(goal) })}
         </Text>
 
-        <Text style={[styles.section, styles.sectionPoison]}>EMPOISONNEMENT</Text>
+        <Text style={[styles.section, styles.sectionPoison]}>
+          {tr('data.poisoning')}
+        </Text>
         <View style={styles.cardRow}>
           <StatCard
-            value={formatDuration(poisonWeekMs)}
-            label="EN VIOLET (7 JOURS)"
+            value={formatDuration(poisonWeekMs, tr)}
+            label={tr('data.purpleWeek')}
             color={poisonWeekMs > 0 ? C.poison : C.segmentFull}
           />
           <StatCard
             value={String(cleanStreak)}
-            label="JOURS SANS ALCOOL"
+            label={tr('data.alcoholFreeDays')}
             color={cleanStreak > 0 ? C.segmentFull : C.textDim}
           />
         </View>
@@ -266,54 +294,52 @@ export function DataScreen() {
                     isToday && { color: C.text, fontFamily: FONTS.monoBold },
                   ]}
                 >
-                  {b.label}
+                  {weekdayLetters[b.weekday] ?? ''}
                 </Text>
               </View>
             );
           })}
         </View>
-        <Text style={styles.chartHint}>
-          Objectif : le moins de temps en violet possible.
-        </Text>
+        <Text style={styles.chartHint}>{tr('data.poisonHint')}</Text>
 
-        <Text style={styles.section}>30 DERNIERS JOURS</Text>
+        <Text style={styles.section}>{tr('data.last30')}</Text>
         <View style={styles.cardRow}>
           <StatCard
             value={(recap.waterMl / 1000).toFixed(1)}
             unit="L"
-            label="EAU BUE"
+            label={tr('data.waterDrunk')}
             color={C.segmentFull}
           />
           <StatCard
             value={String(recap.alcoholUnits)}
-            label="VERRES D'ALCOOL"
+            label={tr('data.alcoholGlasses')}
             color={recap.alcoholUnits > 0 ? C.poison : C.textDim}
           />
         </View>
         <View style={styles.cardRow}>
           <StatCard
-            value={formatDuration(recap.poisonedMs)}
-            label="TEMPS EMPOISONNÉ"
+            value={formatDuration(recap.poisonedMs, tr)}
+            label={tr('data.poisonedTime')}
             color={recap.poisonedMs > 0 ? C.poison : C.segmentFull}
           />
           <StatCard
             value={String(recap.cleanDays)}
             unit={`/ ${recap.cleanDays + recap.poisonedDays}`}
-            label="JOURS PROPRES"
+            label={tr('data.cleanDays')}
             color={C.segmentFull}
           />
         </View>
 
-        <Text style={styles.section}>JOURNÉE</Text>
+        <Text style={styles.section}>{tr('data.day')}</Text>
         {items.length === 0 ? (
-          <Text style={styles.empty}>Aucun événement aujourd'hui.</Text>
+          <Text style={styles.empty}>{tr('data.empty')}</Text>
         ) : (
           <View style={{ gap: 8 }}>
             {items.map((item) => {
               const t = new Date(item.at);
               const hh = t.getHours().toString().padStart(2, '0');
               const mm = t.getMinutes().toString().padStart(2, '0');
-              const { text, color } = labelFor(item);
+              const { text, color } = labelFor(item, tr);
               return (
                 <View key={String(item.at) + item.type} style={styles.row}>
                   <Text style={styles.time}>
