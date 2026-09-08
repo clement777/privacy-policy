@@ -653,14 +653,24 @@ export function computeState(
   let levelMl = anchorLevelMl(startProfile);
   let cursor = sorted[0].at;
 
+  // Le niveau est plancherisé à ZÉRO à chaque pas, et pas seulement à la fin.
+  //
+  // Sans ce plancher, la perte intégrée entre deux événements s'accumulait sans
+  // borne : quelqu'un qui n'avait pas bu depuis vingt heures se retrouvait à
+  // plusieurs litres SOUS le zéro affiché. Le verre suivant remboursait cette
+  // dette invisible au lieu de remplir la barre — l'utilisateur appuyait sur
+  // EAU, l'écran DONNÉES comptait bien son verre, et la barre ne bougeait pas.
+  //
+  // `applyEventImpact` bornait déjà le niveau à [0, cap] lors d'un événement :
+  // l'invariant existait, seule l'intégration de la perte ne le respectait pas.
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
-    levelMl -= integrateLoss(d, cursor, e.at, baseProfile);
+    levelMl = Math.max(0, levelMl - integrateLoss(d, cursor, e.at, baseProfile));
     const p = effectiveProfile(sorted, e.at, baseProfile);
     levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), credited[i]);
     cursor = e.at;
   }
-  levelMl -= integrateLoss(d, cursor, at, baseProfile);
+  levelMl = Math.max(0, levelMl - integrateLoss(d, cursor, at, baseProfile));
   levelMl = clamp(levelMl, 0, capNow);
 
   const poisonMult = poisonMultFrom(d.alcohol, at);

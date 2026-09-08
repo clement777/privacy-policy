@@ -457,3 +457,46 @@ describe('initialLevelPct (onboarding calibration)', () => {
     expect(Math.round(s.levelPct)).toBe(35);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Régression : un verre bu à barre vide doit se voir.
+//
+// Signalé depuis l'app : barre à 0 %, un appui sur EAU, rien ne bouge — mais
+// l'écran DONNÉES compte bien +0,5 L. Les deux sont d'accord, c'est le niveau
+// qui était faux : la perte intégrée entre deux événements n'était bornée
+// nulle part, donc quelqu'un qui n'avait pas bu depuis 20 h accumulait une
+// « dette » de plusieurs litres sous le zéro affiché. Le verre suivant
+// remboursait cette dette au lieu de remplir la barre.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('#R1 — un verre à barre vide remonte le niveau', () => {
+  // Un seul verre au réveil, puis plus rien pendant 20 h : la barre est à 0.
+  const events: HydrationEvent[] = [
+    { type: 'water', at: ts(7), volumeMl: 250 },
+  ];
+  const emptyAt = ts(7) + 20 * 3600_000;
+
+  it('la barre est bien vide avant le verre', () => {
+    expect(computeState(events, emptyAt, P70).levelPct).toBe(0);
+  });
+
+  it('le verre suivant fait remonter la barre', () => {
+    const after: HydrationEvent[] = [
+      ...events,
+      { type: 'water', at: emptyAt, volumeMl: 500 },
+    ];
+    const state = computeState(after, emptyAt + 1000, P70);
+    expect(state.levelMl).toBeGreaterThan(400);
+    expect(state.levelPct).toBeGreaterThan(0);
+  });
+
+  it('le niveau ne descend jamais sous zéro, même après plusieurs jours à sec', () => {
+    const state = computeState(events, ts(7) + 5 * 24 * 3600_000, P70);
+    expect(state.levelMl).toBe(0);
+    const after = computeState(
+      [...events, { type: 'water', at: ts(7) + 5 * 24 * 3600_000, volumeMl: 500 }],
+      ts(7) + 5 * 24 * 3600_000 + 1000,
+      P70
+    );
+    expect(after.levelMl).toBeGreaterThan(400);
+  });
+});

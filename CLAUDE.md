@@ -196,6 +196,13 @@ qui n'a pas de seuil.
   pied de page de la landing rendait le bouton inerte en mode paysage. Le bouton
   restait visible et parfaitement mort ; un visiteur a tapé 28 fois.
   → **Tester en paysage, pas seulement en portrait.**
+- **Un invariant appliqué à un seul endroit n'est pas un invariant.** Le moteur
+  bornait le niveau à [0, cap] lors d'un événement (`applyEventImpact`) mais pas
+  pendant l'intégration de la perte entre deux événements. Résultat : une
+  « dette » de plusieurs litres s'accumulait sous le zéro affiché, et un verre
+  bu à barre vide la remboursait au lieu de remplir la barre — bouton sans
+  effet visible, alors que l'écran DONNÉES comptait bien le verre.
+  → Quand deux calculs partagent une borne, la vérifier aux DEUX endroits.
 - **Ne jamais mettre de backticks dans un message de commit passé en `-m`** —
   le shell les exécute. Utiliser `git commit -F fichier`.
 - Les sessions Claude Code longues perdent leurs connecteurs MCP.

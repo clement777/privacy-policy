@@ -627,14 +627,18 @@ private func rawLevelMl(_ d: Derived, _ at: TimeInterval, _ base: UserProfile) -
     var cursor = sorted[0].at
     var tz = TZOffsetCache()
 
+    // Plancher à zéro à chaque pas — voir hydrationEngine.ts, même correctif.
+    // Sans lui, la perte intégrée entre deux événements descendait sans borne
+    // sous le zéro affiché, et le verre suivant remboursait cette dette au lieu
+    // de remplir la barre.
     for i in 0..<sorted.count {
         let e = sorted[i]
-        levelMl -= integrateLoss(d, cursor, e.at, base, &tz)
+        levelMl = max(0, levelMl - integrateLoss(d, cursor, e.at, base, &tz))
         advance(e.at)
         levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), d.credited[i])
         cursor = e.at
     }
-    levelMl -= integrateLoss(d, cursor, at, base, &tz)
+    levelMl = max(0, levelMl - integrateLoss(d, cursor, at, base, &tz))
     return levelMl
 }
 

@@ -196,14 +196,15 @@ function rawLevelMl(d: Derived, at: number, base: UserProfile) {
   let levelMl = anchorLevelMl(p);
   let cursor = sorted[0].at;
   const tz = new TZOffsetCache();
+  // Plancher à zéro à chaque pas — voir hydrationEngine.ts, même correctif.
   for (let i = 0; i < sorted.length; i++) {
     const e = sorted[i];
-    levelMl -= integrateLoss(d, cursor, e.at, base, tz);
+    levelMl = Math.max(0, levelMl - integrateLoss(d, cursor, e.at, base, tz));
     advance(e.at);
     levelMl = applyEventImpact(e, levelMl, dailyNeedMl(p), d.credited[i]);
     cursor = e.at;
   }
-  levelMl -= integrateLoss(d, cursor, at, base, tz);
+  levelMl = Math.max(0, levelMl - integrateLoss(d, cursor, at, base, tz));
   return levelMl;
 }
 
